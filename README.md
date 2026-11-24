@@ -7,7 +7,7 @@
 > [!CAUTION]
 > **⚠️ 這個版本還沒做自動備份！**
 > 系統目前**不會自動備份**資料庫與學員上傳的檔案，伺服器硬碟損壞或誤刪就會**永久遺失**所有作業與成績。
-> - 現在只有**手動**指令：`.\.venv\Scripts\python manage.py backup`（SQLite + 已上傳檔案打包到 `data/backups/`）。PostgreSQL 需另外用 `pg_dump`。
+> - 現在只有**手動**指令：Windows 用 `.\.venv\Scripts\python manage.py backup`，macOS／Linux 用 `.venv/bin/python manage.py backup`（SQLite + 已上傳檔案打包到 `data/backups/`）。PostgreSQL 需另外用 `pg_dump`。
 > - **正式收件前**一定要決定：備份頻率、備份存放位置（伺服器位置確定後再定）、誰負責，並**實際演練一次還原**。
 > - 在自動備份完成前，營隊期間請至少每天（建議每次作業截止後）手動備份一次，並把備份檔複製到另一台機器。
 
@@ -30,13 +30,21 @@ Copy-Item 'C:\path\to\bg.jpg' aams/static/local/bg.jpg
 Copy-Item 'C:\path\to\logo.png' aams/static/local/logo.png
 ```
 
+macOS／Linux 範例：
+
+```bash
+mkdir -p aams/static/local
+cp /path/to/bg.jpg aams/static/local/bg.jpg
+cp /path/to/logo.png aams/static/local/logo.png
+```
+
 此目錄已由 `.gitignore` 排除。缺少圖片時仍可啟動，背景會顯示預設暖橘色，介面以文字顯示系統名稱；兩張圖片可分別選用。新增或更換圖片後重新啟動服務。Docker 本機建置會將當時放在目錄內的圖片複製進映像；若要提供映像給其他人，請先確認圖片的散布授權，或在沒有圖片的環境重新建置。
 
 ## 授權
 
 本儲存庫的程式碼以 [GNU General Public License v3.0（GPL-3.0-only）](LICENSE) 授權。AIS3 Junior 的官方圖片與標誌不包含在此授權內，也不隨 Git 儲存庫提供。
 
-如需要圖片請聯絡 [ais3moe@gmail.com](ais3moe@gmail.com)。
+如需要圖片請聯絡 [ais3moe@gmail.com](mailto:ais3moe@gmail.com)。
 
 ## 文件
 
@@ -46,7 +54,11 @@ Copy-Item 'C:\path\to\logo.png' aams/static/local/logo.png
 | [docs/LAN_TESTING.md](docs/LAN_TESTING.md) | **不連外網**的內網測試：單機、同網段多台電腦、測試劇本與驗收清單 |
 | [discord_setting_readme.md](discord_setting_readme.md) | Discord 頻道通知：會發哪些訊息、建立 Webhook、填入設定、測試與疑難排解 |
 
-## 30 秒快速開始（Windows／單機）
+## 快速開始（Windows、macOS、Linux）
+
+程式碼設計為可在 Windows、macOS、Linux 執行；正式部署的 Docker 映像使用 Linux。每次推送會透過 [GitHub Actions](.github/workflows/tests.yml) 在三種系統上執行測試。以下是在**各自的電腦上建立** Python 虛擬環境的指令；不要把另一個作業系統建立的 `.venv/` 複製過來。需要 Python 3.11 以上（Docker 使用 3.12）。
+
+### Windows PowerShell
 
 ```powershell
 python -m venv .venv
@@ -55,6 +67,18 @@ python -m venv .venv
 .\.venv\Scripts\python manage.py seed-demo --active
 .\.venv\Scripts\python run.py
 ```
+
+### macOS／Linux（終端機）
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock.txt
+.venv/bin/python manage.py init
+.venv/bin/python manage.py seed-demo --active
+.venv/bin/python run.py
+```
+
+兩種環境都在專案根目錄執行。`.env`、`data/` 和 `.venv/` 是本機產生的內容，不會隨 Git clone 提供；首次啟動需要在新機器執行 `manage.py init`。完整步驟見 [建置與使用說明](docs/BUILD_AND_USAGE.md)。
 
 瀏覽器開啟 <http://127.0.0.1:8000>，以 `s011@demo.ais3.local` / `Ais3-Demo-2026` 登入（測試帳號，**正式上線前必須刪除**，詳見下一節）。
 
@@ -223,7 +247,7 @@ FastAPI ──> SQLite（測試）／PostgreSQL（正式）
 ```
 
 - Python 3.12、FastAPI、SQLAlchemy 2、Argon2id、TOTP（pyotp）、pypdf
-- 測試：`.\.venv\Scripts\python -m pip install -r requirements-dev.txt` 後執行 `.\.venv\Scripts\python -m pytest -q`（49 個測試，涵蓋規格 §9.3 的主要安全案例與新功能）
+- 測試：安裝 `requirements-dev.txt` 後執行 `python -m pytest -q`（先使用對應平台的虛擬環境 Python，例如 Windows 的 `.\.venv\Scripts\python` 或 macOS／Linux 的 `.venv/bin/python`；49 個測試涵蓋規格 §9.3 的主要安全案例與新功能）
 
 ## 規格對應與已知限制
 

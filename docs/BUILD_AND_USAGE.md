@@ -44,9 +44,9 @@ Dockerfile, docker-compose.yml, deploy/   正式部署
 
 ---
 
-## 3. 本機建置（Windows PowerShell）
+## 3. 本機建置（Windows、macOS、Linux）
 
-> 以下指令在專案根目錄 `D:\AIS3J-homework-system` 執行。macOS／Linux 把 `.\.venv\Scripts\python` 換成 `.venv/bin/python`。
+> 以下指令在專案根目錄執行。Windows PowerShell 範例使用 `.\.venv\Scripts\python`；macOS／Linux 終端機使用 `.venv/bin/python`，且通常以 `python3` 建立虛擬環境。兩個平台的 `.venv/` 不能互相複製，請在目標機器重新安裝套件。
 
 ### 3.1 建立虛擬環境並安裝套件
 
@@ -56,6 +56,17 @@ python -m venv .venv
 .\.venv\Scripts\python -m pip install --upgrade pip
 .\.venv\Scripts\python -m pip install -r requirements.lock.txt
 ```
+
+macOS／Linux：
+
+```bash
+python3 --version                     # 需 3.11 以上
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.lock.txt
+```
+
+此後將本章 Windows 指令中的 `.\.venv\Scripts\python` 換成 `.venv/bin/python` 即可；例如 `.venv/bin/python manage.py init` 與 `.venv/bin/python run.py`。正式部署則使用第 6 節的 Linux Docker Compose 流程。
 
 - `requirements.lock.txt`：完整鎖定版本（建議，符合 SEC-019 供應鏈要求）
 - `requirements.txt`：直接相依套件
