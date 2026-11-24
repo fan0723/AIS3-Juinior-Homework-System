@@ -1,0 +1,25 @@
+{
+	# 內網部署：使用 Caddy 內部 CA。請將 root CA 憑證安全發給使用者並加入信任
+	# （docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt）
+	# 若有公有網域，可改用 DNS-01 取得公開可信憑證（見部署手冊）。
+	admin off
+}
+
+# 主站
+{$AAMS_DOMAIN}:443 {
+	tls internal
+	request_body {
+		max_size 45MB
+	}
+	encode gzip
+	reverse_proxy app:8000
+}
+
+# 隔離預覽來源（不同 origin）
+{$AAMS_DOMAIN}:8443 {
+	tls internal
+	request_body {
+		max_size 1KB
+	}
+	reverse_proxy app:8001
+}

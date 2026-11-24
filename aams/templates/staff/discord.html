@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Discord 設定{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › Discord 設定</div>
+<h1 class="page-title">Discord 設定</h1>
+
+<div class="card">
+  <h3>頻道狀態</h3>
+  <p>學員公告頻道：{% if student_ok %}<span class="tag ok">已設定</span>{% else %}<span class="tag">未設定（不傳送）</span>{% endif %}
+    · staff 頻道：{% if staff_ok %}<span class="tag ok">已設定</span>{% else %}<span class="tag">未設定（不傳送）</span>{% endif %}</p>
+  <p class="muted">Webhook 網址只有管理員（staff）能在{% if ctx.is_admin %}<a href="/admin/system#discord">管理後台 › 系統</a>{% else %}「管理後台 › 系統」{% endif %}設定（詳見專案根目錄 <span class="mono">discord_setting_readme.md</span>）。
+    未設定時，下方的提醒排程仍會照常計算與記錄，只是不會真的送出。</p>
+  {% if student_ok or (staff_ok and ctx.is_admin) %}
+  <form method="post" action="/staff/discord/test" class="field-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div><label>測試頻道</label><select name="channel">{% if student_ok %}<option value="student">學員公告頻道</option>{% endif %}{% if staff_ok and ctx.is_admin %}<option value="staff">staff 頻道</option>{% endif %}</select></div>
+    <div><label>要 @ 的身分組</label><select name="role"><option value="">不提及</option>{% for r in roles %}<option value="{{ r.id }}">@{{ r.label }}</option>{% endfor %}</select></div>
+    <div><label>&nbsp;</label><button class="secondary" type="submit">立即送出測試訊息</button></div>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>可 @ 的身分組</h3>
+  <p class="muted">登記後，講師可以在「作業設定 › 截止前提醒」與「發布公告」選擇要 @ 哪個身分組。其他訊息（成績發布、申覆、警示）一律不 @ 任何人。</p>
+  {% if roles %}
+  <table class="compact">
+    <tr><th>顯示名稱</th><th>身分組 ID</th><th>登記者</th><th></th></tr>
+    {% for r in roles %}
+    <tr><td>@{{ r.label }}</td><td class="mono">{{ r.role_id }}</td><td>{{ creators[r.created_by].name if creators[r.created_by] else "?" }} · {{ fmt_dt(r.created_at, False) }}</td>
+      <td><form class="inline" method="post" action="/staff/discord/roles/{{ r.id }}/delete" data-confirm="刪除後，用到這個身分組的作業與公告會改成「不提及」。確定？">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="small danger" type="submit">刪除</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">尚未登記任何身分組。</p>{% endif %}
+  <form method="post" action="/staff/discord/roles" class="field-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div><label>顯示名稱</label><input type="text" name="label" maxlength="60" placeholder="例如 學員" required></div>
+    <div><label>身分組 ID</label><input type="text" name="role_id" maxlength="30" placeholder="例如 1234567890123456789" required></div>
+    <div><label>&nbsp;</label><button type="submit">登記</button></div>
+  </form>
+  <details><summary>怎麼取得身分組 ID？</summary>
+    <ol>
+      <li>Discord 左下角齒輪「使用者設定」→「進階」→ 開啟<strong>「開發者模式」</strong>。</li>
+      <li>伺服器名稱 →「伺服器設定」→「身分組」，在要 @ 的身分組（例如「學員」）上按右鍵 →<strong>「複製身分組 ID」</strong>。</li>
+      <li>貼到上方「身分組 ID」，顯示名稱填「學員」，按「登記」。</li>
+      <li>同一頁點進該身分組 →「顯示」→ 開啟<strong>「允許任何人 @提及此身分組」</strong>（否則 Webhook 的 @ 可能不會通知）。</li>
+      <li>回到上方「立即送出測試訊息」，選這個身分組送一次，確認大家真的收到通知。</li>
+    </ol>
+  </details>
+</div>
+
+<div class="card">
+  <h3>即將發送的截止提醒</h3>
+  <p class="muted">系統預設：截止前 <strong>{{ default_hours }}</strong>（{% if reminder_source == "env" %}由伺服器 .env 設定{% elif reminder_source == "web" %}管理員在系統頁設定{% else %}未設定，使用內建值{% endif %}{% if ctx.is_admin %}，<a href="/admin/system#reminder">修改</a>{% endif %}）。每份作業可在「作業設定」自訂、關閉或指定要 @ 的身分組。
+    只提醒截止時間（不提醒最終收件期限），不會列出誰還沒交。</p>
+  {% for x in upcoming %}
+  <div class="ann">
+    <h4>{{ x.course.title }} / <a href="/staff/assignments/{{ x.a.id }}/edit">{{ x.a.title }}</a>
+      <span class="muted">截止 {{ fmt_dt(x.a.due_at, False) }}</span>
+      {% if x.role %}<span class="tag info">@{{ x.role.label }}</span>{% endif %}</h4>
+    {% if x.blocked %}<p><span class="tag warn">不會發送</span> 原因：{{ x.blocked }}</p>
+    {% elif not x.slots %}<p><span class="tag">已關閉提醒</span></p>
+    {% else %}
+      <p>{% for s in x.slots %}
+        <span class="tag {% if s.state == 'SENT' %}ok{% elif s.state == 'SKIPPED' %}{% else %}info{% endif %}">
+          截止前 {{ hours_label(s.hours) }} · {{ fmt_dt(s.at, False) }} ·
+          {{ {"PENDING": "待發送", "SENT": "已發送", "SKIPPED": "已略過（停機錯過）", "PAST": "已過"}[s.state] }}</span>
+      {% endfor %}</p>
+      <div class="sim-passage">{% if x.role %}@{{ x.role.label }} {% endif %}{{ x.preview }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">目前沒有尚未截止的作業。</p>
+  {% endfor %}
+</div>
+{% endblock %}

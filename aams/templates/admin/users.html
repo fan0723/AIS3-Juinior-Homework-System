@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}帳號管理{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 帳號</div>
+<h1 class="page-title">帳號管理</h1>
+<div class="alert warn">課程進行中請盡量<strong>逐筆新增帳號</strong>，避免重新批次匯入。</div>
+<div class="card">
+  <details><summary>＋ 新增單一使用者</summary>
+  <form method="post" action="/admin/users">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="field-row">
+      <div><label>Email（登入帳號）</label><input type="email" name="email" required maxlength="254"></div>
+      <div><label>姓名</label><input type="text" name="name" required maxlength="100"></div>
+      <div><label>學校</label><input type="text" name="school" maxlength="120"></div>
+      <div><label>年級</label><input type="text" name="grade" maxlength="20"></div>
+      <div><label>電話（僅管理員可見）</label><input type="text" name="phone" maxlength="40"></div>
+      <div><label>組別</label><select name="group_code"><option value="">（無）</option>{% for g in groups %}<option value="{{ g.code }}">{{ g.code }}</option>{% endfor %}</select></div>
+    </div>
+    <label>角色</label>
+    {% for r in ["STUDENT","TA","INSTRUCTOR","ADMIN"] %}<label class="check"><input type="checkbox" name="roles" value="{{ r }}" {% if r == "STUDENT" %}checked{% endif %}> {{ ROLE_LABELS[r] }}</label>{% endfor %}
+    <label>初始密碼（留空則自動產生並只顯示一次）</label>
+    <input type="password" name="initial_password" maxlength="128" autocomplete="new-password">
+    <div class="help">例：民國年3碼+月2碼+日2碼+身分證末4碼（如 10007038907）。帳號狀態為「待首次改密碼」。</div>
+    <div class="actions"><button type="submit">建立</button></div>
+  </form>
+  </details>
+</div>
+<div class="card">
+  <form method="get" action="/admin/users" class="field-row">
+    <div><input type="text" name="q" value="{{ q }}" placeholder="搜尋 Email 或姓名"></div>
+    <div><select name="role"><option value="">全部角色</option>{% for r in ["STUDENT","TA","INSTRUCTOR","ADMIN"] %}<option value="{{ r }}" {% if role == r %}selected{% endif %}>{{ ROLE_LABELS[r] }}</option>{% endfor %}</select></div>
+    <div><button class="secondary" type="submit">搜尋</button></div>
+  </form>
+  <table style="margin-top:10px">
+    <tr><th>ID</th><th>Email</th><th>姓名</th><th>角色</th><th>組別</th><th>學校／年級</th><th>電話</th><th>狀態</th></tr>
+    {% for x in rows %}
+    <tr>
+      <td>{{ x.u.id }}</td><td><a href="/admin/users/{{ x.u.id }}">{{ x.u.email }}</a></td><td>{{ x.u.name }}</td>
+      <td>{% for r in x.u.role_set|sort %}<span class="tag dark">{{ ROLE_LABELS[r] }}</span> {% endfor %}</td>
+      <td>{{ x.g.code if x.g else "" }}</td><td>{{ x.u.school }} {{ x.u.grade }}</td><td>{{ x.u.phone }}</td>
+      <td>{% if x.u.status == "ACTIVE" %}<span class="tag ok">啟用</span>{% elif x.u.status == "DISABLED" %}<span class="tag bad">停用</span>{% else %}<span class="tag warn">待改密碼</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

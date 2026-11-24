@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}登入{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card login-card">
+    {% if has_local_brand_asset('logo.png') %}<img class="logo" src="/static/local/logo.png" alt="AIS3 Junior">{% endif %}
+    <h2 style="text-align:center">AIS3 Junior 作業繳交系統</h2><p class="muted" style="text-align:center">請以報名 Email 登入</p>
+    {% if error %}<div class="alert bad">{{ error }}</div>{% endif %}
+    <form method="post" action="/login" autocomplete="on">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <label for="email">報名 Email</label>
+      <input id="email" type="email" name="email" value="{{ email }}" required autofocus autocomplete="username">
+      <label for="password">密碼</label>
+      <input id="password" type="password" name="password" required autocomplete="current-password">
+      <div class="help">首次登入請使用主辦單位提供的初始密碼（民國年 3 碼 + 月 2 碼 + 日 2 碼 + 身分證末 4 碼，共 11 碼數字）。</div>
+      <div class="actions"><button type="submit" style="width:100%">登入</button></div>
+    </form>
+    <p class="muted">忘記密碼？請攜帶證件洽詢工作人員，由管理員核身後重設。</p>
+  </div>
+</div>
+{% endblock %}

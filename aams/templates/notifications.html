@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}通知{% endblock %}
+{% block content %}
+<h1 class="page-title">通知中心</h1>
+<div class="card">
+  <form method="post" action="/notifications/read"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="small secondary" type="submit">全部標為已讀</button></form>
+  <table style="margin-top:10px">
+    <tr><th>時間</th><th>內容</th><th>目前檔案狀態</th><th></th></tr>
+    {% for n in items %}
+    <tr>
+      <td>{{ fmt_dt(n.created_at) }}{% if not n.read_at %} <span class="tag late">新</span>{% endif %}</td>
+      <td>{{ n.message }}</td>
+      <td>{% set r = states[n.id] %}{% if r %}{{ r.scan_state }}{% endif %}</td>
+      <td><a href="/staff/submissions/{{ n.submission_id }}">查看</a></td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">沒有通知。</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

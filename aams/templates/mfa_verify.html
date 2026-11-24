@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}兩步驟驗證{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <div class="card login-card">
+    <h2>兩步驟驗證</h2>
+    <p>請輸入驗證器 App（Google Authenticator、Microsoft Authenticator 等）顯示的 6 位數驗證碼。</p>
+    {% if error %}<div class="alert bad">{{ error }}</div>{% endif %}
+    <form method="post" action="/mfa/verify">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <input type="text" name="code" inputmode="numeric" maxlength="7" autocomplete="one-time-code" required autofocus>
+      <div class="actions"><button type="submit">驗證</button></div>
+    </form>
+    <p class="muted">遺失裝置？請由另一位管理員核身後於後台重設 MFA。</p>
+  </div>
+</div>
+{% endblock %}

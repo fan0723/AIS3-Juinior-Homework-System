@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}管理後台{% endblock %}
+{% block content %}
+<h1 class="page-title">管理後台</h1>
+<div class="grid cols-4">
+  <div class="card"><div class="muted">帳號</div><div class="kpi">{{ counts.users }}</div><div class="muted">待首次改密碼 {{ counts.pending }}</div></div>
+  <div class="card"><div class="muted">組別／課程</div><div class="kpi">{{ counts.groups }} / {{ counts.courses }}</div></div>
+  <div class="card"><div class="muted">作業／提交版本</div><div class="kpi">{{ counts.assignments }} / {{ counts.revisions }}</div></div>
+  <div class="card"><div class="muted">檢查中／未通過</div><div class="kpi">{{ counts.pending_scan }} / {{ counts.rejected }}</div></div>
+</div>
+<div class="grid cols-3">
+  <a class="card course-card" href="/admin/users"><h3>帳號管理</h3><p class="muted">逐人新增、編輯、停用、核身重設密碼／MFA、電話（僅管理員可見）</p></a>
+  <a class="card course-card" href="/admin/import"><h3>CSV 批次匯入</h3><p class="muted">僅新增（insert-only），先預覽再確認</p></a>
+  <a class="card course-card" href="/admin/groups"><h3>分組</h3><p class="muted">G01–G12、組員與帶組助教</p></a>
+  <a class="card course-card" href="/admin/courses"><h3>課程</h3><p class="muted">建立課程、發布、指派講師</p></a>
+  <a class="card course-card" href="/admin/progress"><h3>學員進度</h3><p class="muted">跨課程繳交狀況矩陣</p></a>
+  <a class="card course-card" href="/admin/exports"><h3>匯出</h3><p class="muted">成績 CSV、繳交紀錄、帳號；附件請用「批次下載」</p></a>
+  <a class="card course-card" href="/admin/audit"><h3>稽核紀錄</h3><p class="muted">登入、改分、匯出、設定變更</p></a>
+  <a class="card course-card" href="/admin/system"><h3>系統資訊</h3><p class="muted">部署設定摘要</p></a>
+</div>
+{% endblock %}

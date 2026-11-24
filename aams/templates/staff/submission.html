@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}{{ owner }} · {{ a.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> › {{ owner }}</div>
+<h1 class="page-title">{{ owner }} · {{ a.title }}</h1>
+
+{% if latest and selected and latest.id != selected.id %}
+<div class="red-banner">已有較新版本：學生最新提交為第 {{ latest.revision_no }} 版（{{ fmt_dt(latest.finalized_at) }}，{{ latest.scan_state }}），你正在檢視／批改第 {{ selected.revision_no }} 版。</div>
+{% endif %}
+{% if appeals %}
+<div class="card">
+  <h3>成績申覆（{{ appeals|length }}）<a class="small" href="/staff/appeals">前往申覆列表處理</a></h3>
+  {% for ap in appeals %}
+    <p><span class="tag {% if ap.status == 'OPEN' %}warn{% elif ap.status == 'CHANGED' %}ok{% endif %}">{{ appeal_labels[ap.status] }}</span>
+      {{ fmt_dt(ap.created_at) }} · {% if ap.question_id %}{% for q in qs if q.id == ap.question_id %}Q{{ q.ordinal }} {{ q.title }}{% endfor %}{% else %}總分{% endif %}：{{ ap.reason }}</p>
+  {% endfor %}
+</div>
+{% endif %}
+{% if released and released_rev %}
+<div class="alert info">已發布第 {{ released_rev }} 版成績（第 {{ released.release_no }} 次發布）{% if latest and latest.revision_no != released_rev %}／最新交件第 {{ latest.revision_no }} 版待處理{% endif %}。已發布資料不會自動改變，需重新發布。</div>
+{% endif %}
+
+<div class="two-col">
+<div>
+  <div class="card">
+    <h3>版本（保留最近 5 版的檔案）</h3>
+    <table class="compact">
+      <tr><th>版本</th><th>提交者</th><th>時間</th><th>準時</th><th>檢查</th><th>檔案</th></tr>
+      {% for r in revs %}
+      <tr {% if selected and r.id == selected.id %}style="background:#fff3e6"{% endif %}>
+        <td><a href="/staff/submissions/{{ sub.id }}?rev={{ r.id }}">第 {{ r.revision_no }} 版</a>{% if loop.first %} <span class="tag dark">最新</span>{% endif %}</td>
+        <td>{{ uploaders[r.id].name if uploaders[r.id] else "?" }}</td>
+        <td>{{ fmt_dt(r.finalized_at) }}</td>
+        <td>{% if r.is_late %}<span class="tag late">LATE</span>{% else %}<span class="tag ok">ON_TIME</span>{% endif %}
+            {% if r.late_reclassified_reason %}<div class="muted">已重新分類：{{ r.late_reclassified_reason }}</div>{% endif %}
+            {% if r.late_note %}<div><span class="tag ok">已核准</span> <span class="muted">{{ r.late_note }}</span></div>{% endif %}</td>
+        <td>{% if r.scan_state == "ACCEPTED" %}<span class="tag ok">通過</span>{% elif r.scan_state == "REJECTED" %}<span class="tag bad">未通過</span>{% else %}<span class="tag warn">檢查中</span>{% endif %}</td>
+        <td>
+          {% if r.purged_at %}<span class="muted">已淘汰</span>{% else %}
+          {% for f in arts[r.id] %}
+            <div>{{ f.original_filename }} <span class="muted">{{ fmt_bytes(f.size) }}</span>
+            {% if f.inspection_state == "ACCEPTED" %}<a href="/artifacts/{{ f.id }}/preview" target="_blank" rel="noopener">預覽</a> · <a href="/artifacts/{{ f.id }}/download">下載</a>
+            {% elif f.inspection_state == "REJECTED" %}<span class="tag bad">{{ f.inspection_detail }}</span>{% endif %}</div>
+          {% endfor %}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% if members %}<p class="muted">目前組員：{% for m in members %}{{ m.name }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+  </div>
+
+  {% if selected and selected.is_late and manage %}
+  <div class="card">
+    <h3>遲交核准註記 <span class="tag late">LATE</span></h3>
+    <p class="muted">第 {{ selected.revision_no }} 版於 {{ fmt_dt(selected.finalized_at) }} 提交（截止 {{ fmt_dt(selected.due_at_snapshot) }}）。
+      註記<strong>不會移除 LATE 標記</strong>，只記錄已核准與原因；批改頁與下載的 README 都看得到，並寫入稽核紀錄。</p>
+    <form method="post" action="/staff/revisions/{{ selected.id }}/late-note">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>核准原因（留空 = 清除註記）</label>
+      <input type="text" name="note" maxlength="500" value="{{ selected.late_note }}" placeholder="例如：現場網路中斷，已由工作人員確認">
+      <div class="actions"><button class="small" type="submit">儲存註記</button></div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if selected and ctx.is_admin %}
+  <div class="card">
+    <details><summary>管理員：重新分類遲交狀態（需原因）</summary>
+      <form method="post" action="/staff/revisions/{{ selected.id }}/reclassify">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <select name="is_late"><option value="0">ON_TIME</option><option value="1">LATE</option></select>
+        <label>原因</label><input type="text" name="reason" required maxlength="500">
+        <div class="actions"><button class="secondary" type="submit">重新分類第 {{ selected.revision_no }} 版</button></div>
+      </form>
+    </details>
+  </div>
+  {% endif %}
+
+  {% if grading_visible %}
+  <div class="card" id="notes">
+    <h3>內部批改備註 <span class="tag dark">僅工作人員可見</span></h3>
+    <form method="post" action="/staff/submissions/{{ sub.id }}/notes">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="revision_id" value="{{ selected.id if selected else 0 }}">
+      <select name="question_id"><option value="0">整份作業</option>{% for q in qs %}<option value="{{ q.id }}">Q{{ q.ordinal }} {{ q.title }}</option>{% endfor %}</select>
+      <textarea name="content" rows="3" maxlength="5000" required></textarea>
+      <div class="actions"><button class="secondary" type="submit">新增備註</button></div>
+    </form>
+    {% for n, author in notes %}
+      <div style="border-top:1px solid var(--line);padding:6px 0"><span class="muted">{{ fmt_dt(n.created_at) }} · {{ author.name if author else "?" }}</span>
+        <div style="white-space:pre-wrap">{{ n.content }}</div></div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted">你沒有此組／此作業的有效批改任務，因此只能檢視檔案與繳交狀態，看不到未發布分數、評語與內部備註。</p></div>
+  {% endif %}
+</div>
+
+<div>
+  {% if not selected %}
+    <div class="card">尚未提交。</div>
+  {% elif not grading_visible %}
+    <div class="card">無批改權限。</div>
+  {% elif selected.scan_state != "ACCEPTED" %}
+    <div class="card"><div class="alert warn">第 {{ selected.revision_no }} 版尚未通過檔案檢查（{{ selected.scan_state }}），不能評分。</div></div>
+  {% else %}
+  <div class="card">
+    <h3>批改第 {{ selected.revision_no }} 版</h3>
+    <p>逐題加總：<strong>{{ fmt_score(sv.question_total) if sv.question_total is not none else "未完成（目前 " ~ fmt_score(partial) ~ "）" }}</strong> / {{ fmt_score(max_total) }}
+     · 基準分：<strong>{{ fmt_score(sv.base) }}</strong> · 最終分：<strong>{{ fmt_score(sv.final) }}</strong>
+     {% if sv.total and sv.total.manual_final_score is not none %}<span class="tag warn">人工最終分數</span>{% endif %}</p>
+    <p class="muted">空白 = 尚未評分；0 = 確實零分。</p>
+    {% for q in qs %}
+      {% set gi = sv.items.get(q.id) %}
+      {% set can = (gradable == "ALL") or (q.id in gradable) %}
+      <div class="question-card {% if not can %}readonly{% endif %}" id="q{{ q.id }}">
+        <strong>Q{{ q.ordinal }} {{ q.title }}</strong> <span class="muted">滿分 {{ fmt_score(q.max_points) }}</span>
+        {% if gi and gi.score is not none %}<span class="tag ok">{{ fmt_score(gi.score) }}</span>{% else %}<span class="tag">未評分</span>{% endif %}
+        {% if can %}
+        <form method="post" action="/staff/revisions/{{ selected.id }}/grade-item">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="question_id" value="{{ q.id }}">
+          <input type="hidden" name="expected_version" value="{{ gi.row_version if gi else 0 }}">
+          {% if rubrics[q.id] %}<div class="rubric-btns">{% for r in rubrics[q.id] %}<button type="button" data-rubric-score="{{ fmt_score(r.score) }}" data-rubric-feedback="{{ r.feedback_template }}">{{ r.label }}（{{ fmt_score(r.score) }}）</button>{% endfor %}</div>{% endif %}
+          <div class="field-row">
+            <div><label>分數</label><input type="text" name="score" value="{{ fmt_score(gi.score) if gi and gi.score is not none else '' }}" placeholder="空白=未評分"></div>
+            <div><label>修改原因（覆寫時建議填寫）</label><input type="text" name="reason" maxlength="500"></div>
+          </div>
+          <label>給學生的評語（發布後可見）</label>
+          <textarea name="feedback" rows="2" maxlength="5000">{{ gi.feedback_to_student if gi else "" }}</textarea>
+          <div class="actions"><button class="small" type="submit">儲存 Q{{ q.ordinal }}</button><span class="muted">版本 v{{ gi.row_version if gi else 0 }}</span></div>
+        </form>
+        {% else %}
+          <div class="muted">你沒有此題的批改權限。{% if gi and gi.feedback_to_student %}評語：{{ gi.feedback_to_student }}{% endif %}</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="muted">此作業尚未設定題目。</p>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h3>總分與整體回饋</h3>
+    <form method="post" action="/staff/revisions/{{ selected.id }}/total">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="expected_version" value="{{ sv.total.row_version if sv.total else 0 }}">
+      {% if a.grading_mode == "DIRECT_TOTAL" %}
+        <label>直接總分</label>
+        <input type="text" name="direct_total" value="{{ fmt_score(sv.total.direct_total) if sv.total and sv.total.direct_total is not none else '' }}" {% if not total_ok %}readonly{% endif %}>
+      {% else %}
+        <input type="hidden" name="direct_total" value="{{ fmt_score(sv.total.direct_total) if sv.total and sv.total.direct_total is not none else '' }}">
+      {% endif %}
+      {% if manage or total_ok %}
+        <label>人工最終分數（覆寫；空白 = 使用基準分）</label>
+        <input type="text" name="manual_final_score" value="{{ fmt_score(sv.total.manual_final_score) if sv.total and sv.total.manual_final_score is not none else '' }}">
+        <label>覆寫原因</label>
+        <input type="text" name="override_reason" value="{{ sv.total.override_reason if sv.total else '' }}" maxlength="500">
+      {% else %}
+        <input type="hidden" name="manual_final_score" value="{{ fmt_score(sv.total.manual_final_score) if sv.total and sv.total.manual_final_score is not none else '' }}">
+        <input type="hidden" name="override_reason" value="{{ sv.total.override_reason if sv.total else '' }}">
+      {% endif %}
+      <label>整體回饋（發布後學生可見）</label>
+      <textarea name="summary_feedback" rows="3" maxlength="5000">{{ sv.total.summary_feedback if sv.total else "" }}</textarea>
+      <div class="actions"><button class="small" type="submit">儲存</button></div>
+    </form>
+  </div>
+
+  {% if members and manage %}
+  <div class="card">
+    <h3>組員個別最終分數</h3>
+    <p class="muted">預設每位組員取團體最終分；個別調整需填原因。</p>
+    <table class="compact">
+      <tr><th>組員</th><th>個別分數</th><th>原因</th><th></th></tr>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.name }}</td>
+        <td><input form="mo-{{ m.id }}" type="text" name="score" value="{{ fmt_score(overrides[m.id].manual_final_score) if m.id in overrides and overrides[m.id].manual_final_score is not none else '' }}" placeholder="空白=團體分"></td>
+        <td><input form="mo-{{ m.id }}" type="text" name="reason" value="{{ overrides[m.id].reason if m.id in overrides else '' }}" required></td>
+        <td><form id="mo-{{ m.id }}" method="post" action="/staff/revisions/{{ selected.id }}/member-override">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="student_id" value="{{ m.id }}">
+          <button class="small secondary" type="submit">儲存</button></form></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  {% if history %}
+  <div class="card">
+    <details><summary>改分歷史（{{ history|length }}）</summary>
+      <table class="compact">
+        <tr><th>時間</th><th>欄位</th><th>舊</th><th>新</th><th>操作者</th><th>原因</th></tr>
+        {% for h, u in history %}<tr><td>{{ fmt_dt(h.created_at) }}</td><td>{{ h.field }}</td><td>{{ h.old_value }}</td><td>{{ h.new_value }}</td><td>{{ u.name if u else "?" }}</td><td>{{ h.reason }}</td></tr>{% endfor %}
+      </table>
+    </details>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ code }} {{ title }}</h1>
+  <p>{{ detail }}</p>
+  <div class="actions"><a class="btn" href="/">回首頁</a></div>
+  <p class="muted">請使用瀏覽器的「上一頁」返回並修正。</p>
+</div>
+{% endblock %}

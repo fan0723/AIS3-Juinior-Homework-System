@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}管理 {{ course.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › {{ course.title }}</div>
+<h1 class="page-title">管理課程：{{ course.title }}</h1>
+<div class="grid cols-2">
+  <div class="card">
+    <h3>課程說明</h3>
+    <form method="post" action="/staff/courses/{{ course.id }}/edit">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <textarea name="description" rows="6">{{ course.description }}</textarea>
+      <div class="help">純文字，不支援 HTML。</div>
+      <div class="actions"><button type="submit">儲存</button><a class="btn secondary" href="/courses/{{ course.id }}">以學員視角檢視</a></div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>上傳教材（PDF）</h3>
+    <form method="post" action="/staff/courses/{{ course.id }}/materials" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>標題</label><input type="text" name="title" maxlength="200">
+      <label>檔案</label><input type="file" name="file" accept=".pdf" required>
+      <div class="help">教材與學生提交檔分開儲存；上傳時會做 PDF 安全檢查（拒絕含 JavaScript／內嵌檔案等主動內容的 PDF）。</div>
+      <div class="actions"><button type="submit">上傳</button></div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <h3>教材</h3>
+  <table>
+    <tr><th>標題</th><th>檔名</th><th>大小</th><th>SHA-256</th><th>狀態</th><th></th></tr>
+    {% for m in materials %}
+    <tr>
+      <td>{{ m.title }}</td><td>{{ m.original_filename }}</td><td>{{ fmt_bytes(m.size) }}</td><td class="mono">{{ m.sha256[:16] }}…</td>
+      <td>{% if m.visibility == "PUBLISHED" %}<span class="tag ok">公開</span>{% else %}<span class="tag warn">隱藏</span>{% endif %}</td>
+      <td>
+        <form class="inline" method="post" action="/staff/materials/{{ m.id }}/visibility">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="visibility" value="{{ 'HIDDEN' if m.visibility == 'PUBLISHED' else 'PUBLISHED' }}">
+          <button class="small secondary" type="submit">{{ "隱藏" if m.visibility == "PUBLISHED" else "公開" }}</button>
+        </form>
+        <a href="/materials/{{ m.id }}/preview">預覽</a>
+      </td>
+    </tr>
+    {% else %}<tr><td colspan="6" class="muted">尚無教材</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h3>作業 <a class="btn small" href="/staff/courses/{{ course.id }}/assignments/new">＋ 新增作業</a></h3>
+  <table>
+    <tr><th>作業</th><th>模式</th><th>截止</th><th>狀態</th><th></th></tr>
+    {% for a in assignments %}
+    <tr>
+      <td><a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a></td>
+      <td>{{ "團體" if a.submission_mode == "GROUP" else "個人" }}</td>
+      <td>{{ fmt_dt(a.due_at, False) }}</td>
+      <td>{% if a.status == "PUBLISHED" %}<span class="tag ok">已發布</span>{% else %}<span class="tag warn">草稿</span>{% endif %}</td>
+      <td><a href="/staff/assignments/{{ a.id }}/edit">設定</a> · <a href="/staff/assignments/{{ a.id }}/questions">題目／Rubric</a> · <a href="/staff/assignments/{{ a.id }}/tasks">批改任務</a></td>
+    </tr>
+    {% else %}<tr><td colspan="5" class="muted">尚無作業</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}成績申覆{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › 成績申覆</div>
+<h1 class="page-title">成績申覆</h1>
+<div class="actions" style="margin-bottom:12px">
+  <a class="btn {% if show != 'all' %}{% else %}secondary{% endif %}" href="/staff/appeals">處理中</a>
+  <a class="btn {% if show == 'all' %}{% else %}secondary{% endif %}" href="/staff/appeals?show=all">全部</a>
+</div>
+<div class="alert info">申覆由講師（或管理員）處理。需要改分時，請先到「開啟提交」頁面修改分數（會留下改分紀錄），再回到這裡選「已改分」並回覆學員；修改後記得到「統一發布成績」重新發布，學員才看得到新分數。</div>
+{% for x in rows %}
+<div class="card">
+  <h3>{{ x.course.title }} / {{ x.a.title }} · {{ x.owner }}
+    <span class="tag {% if x.ap.status == 'OPEN' %}warn{% elif x.ap.status == 'CHANGED' %}ok{% endif %}">{{ labels[x.ap.status] }}</span></h3>
+  <p class="muted">申覆人：{{ x.student.name }} · {{ fmt_dt(x.ap.created_at) }} · 針對：{% if x.q %}Q{{ x.q.ordinal }} {{ x.q.title }}{% else %}總分{% endif %} · 已發布第 {{ x.ap.revision_no }} 版</p>
+  <div class="ann-body">{{ x.ap.reason }}</div>
+  <p><a class="btn small secondary" href="/staff/submissions/{{ x.ap.submission_id }}">開啟提交（改分）</a></p>
+  {% if x.ap.status == "OPEN" %}
+  <form method="post" action="/staff/appeals/{{ x.ap.id }}/resolve">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>處理結果</label>
+    <select name="decision" required><option value="">請選擇</option><option value="KEPT">維持原分</option><option value="CHANGED">已改分</option></select>
+    <label>給學員的回覆</label>
+    <textarea name="response" rows="3" maxlength="2000" required></textarea>
+    <div class="actions"><button class="small" type="submit">送出回覆</button></div>
+  </form>
+  {% else %}
+  <p><strong>回覆</strong>（{{ x.handler.name if x.handler else "?" }}，{{ fmt_dt(x.ap.resolved_at) }}）：</p>
+  <div class="ann-body">{{ x.ap.response }}</div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card"><p class="muted">目前沒有{% if show != 'all' %}待處理的{% endif %}成績申覆。</p></div>
+{% endfor %}
+{% endblock %}

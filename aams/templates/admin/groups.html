@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}分組{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 分組</div>
+<h1 class="page-title">分組管理</h1>
+<div class="alert info">原則上營隊中不換組、不換帶組助教；此頁用於活動前設定與必要修正，所有變更都會留下稽核紀錄。小組關係不等於評分權限。</div>
+<div class="grid cols-2">
+  <div class="card">
+    <h3>建立組別</h3>
+    <form method="post" action="/admin/groups/create">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>組數（建立 G01…Gnn，已存在的會略過）</label>
+      <input type="number" name="count" value="12" min="1" max="99">
+      <div class="actions"><button type="submit">建立</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>設定學員組別</h3>
+    <form method="post" action="/admin/groups/assign-student">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>學員</label>
+      <select name="student_id">{% for s in students %}<option value="{{ s.id }}">{{ s.name }}（{{ s.email }}）</option>{% endfor %}</select>
+      <label>組別</label>
+      <select name="group_id"><option value="0">（移出所有組別）</option>{% for x in rows %}<option value="{{ x.g.id }}">{{ x.g.label }}</option>{% endfor %}</select>
+      <div class="actions"><button type="submit">儲存</button></div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <table>
+    <tr><th>組別</th><th>學員（{{ "目前" }}）</th><th>帶組助教</th><th>新增助教</th></tr>
+    {% for x in rows %}
+    <tr>
+      <td><strong>{{ x.g.label }}</strong><div class="muted">{{ x.g.code }}</div></td>
+      <td>{% for m in x.members %}{{ m.name }}{% if not loop.last %}、{% endif %}{% else %}<span class="muted">—</span>{% endfor %} <span class="muted">（{{ x.members|length }} 人）</span></td>
+      <td>{% for t in x.tas %}
+        <form class="inline" method="post" action="/admin/groups/{{ x.g.id }}/ta" data-confirm="移除 {{ t.name }} 的帶組身分？">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="ta_id" value="{{ t.id }}"><input type="hidden" name="action" value="remove">
+          <span class="tag dark">{{ t.name }}</span> <button class="small secondary" type="submit">×</button></form>
+      {% else %}<span class="muted">—</span>{% endfor %}</td>
+      <td>
+        <form method="post" action="/admin/groups/{{ x.g.id }}/ta">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+          <select name="ta_id">{% for t in tas %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}</select>
+          <button class="small" type="submit">加入</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

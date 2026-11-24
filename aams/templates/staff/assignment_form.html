@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}{{ "新增作業" if creating else "作業設定" }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/courses/{{ course.id }}">{{ course.title }}</a> › {{ "新增作業" if creating else a.title }}</div>
+<h1 class="page-title">{{ "新增作業" if creating else "作業設定" }}</h1>
+{% for e in errors %}<div class="alert bad">{{ e }}</div>{% endfor %}
+<form class="card" method="post" action="{{ '/staff/courses/%d/assignments/new'|format(course.id) if creating else '/staff/assignments/%d/edit'|format(a.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <div class="field-row">
+    <div><label>標題</label><input type="text" name="title" value="{{ a.title }}" maxlength="200" required></div>
+    <div><label>英文名稱（下載檔名用）</label><input type="text" name="name_en" value="{{ a.name_en or '' }}" maxlength="40" pattern="[A-Za-z0-9_\-]*" placeholder="例如 Lab1XSS">
+      <div class="help">只能用英文字母、數字、底線、連字號。留空時檔名用 Assignment{{ a.id or "編號" }}。</div></div>
+  </div>
+  <label>說明</label><textarea name="description" rows="6">{{ a.description }}</textarea>
+  <div class="help">純文字，不接受 HTML。</div>
+
+  <div class="field-row">
+    <div>
+      <label>繳交模式</label>
+      <select name="submission_mode" {% if has_subs %}disabled{% endif %}>
+        <option value="INDIVIDUAL" {% if a.submission_mode == "INDIVIDUAL" %}selected{% endif %}>個人作業</option>
+        <option value="GROUP" {% if a.submission_mode == "GROUP" %}selected{% endif %}>團體作業（任一組員代全組提交）</option>
+      </select>
+      {% if has_subs %}<input type="hidden" name="submission_mode" value="{{ a.submission_mode }}"><div class="help">已有提交，不可切換。</div>{% endif %}
+    </div>
+    <div>
+      <label>截止時間（台北時間）</label>
+      <input type="datetime-local" name="due_at" value="{{ to_local_input(a.due_at) }}" required>
+      <div class="help">修改後只影響之後的提交判定，並留下稽核紀錄。</div>
+    </div>
+    <div>
+      <label>狀態</label>
+      <select name="status">
+        <option value="DRAFT" {% if a.status != "PUBLISHED" %}selected{% endif %}>草稿（學員看不到）</option>
+        <option value="PUBLISHED" {% if a.status == "PUBLISHED" %}selected{% endif %}>發布給學員</option>
+      </select>
+    </div>
+  </div>
+
+  <label class="check"><input type="checkbox" name="accepting_submissions" value="1" {% if a.accepting_submissions %}checked{% endif %}> 開放收件（獨立總開關）</label>
+  <label class="check"><input type="checkbox" name="allow_late" value="1" {% if a.allow_late %}checked{% endif %}> 截止後仍接受提交（標記 LATE，不自動扣分）</label>
+  <div class="field-row">
+    <div>
+      <label>最終收件期限（台北時間）</label>
+      <input type="datetime-local" name="final_deadline" value="{{ to_local_input(a.final_deadline) }}">
+      <div class="help">超過這個時間後<strong>一律拒收</strong>（即使允許遲交）。
+        {% if settings.event_end_utc %}預設為營隊結束日（{{ fmt_dt(settings.event_end_utc, False) }}）後 7 天。
+        {% else %}留空 = 截止時間後 7 天（尚未設定營隊結束日 AAMS_EVENT_END_AT）。{% endif %}
+        不接受遲交時，截止時間就是最後收件時間。</div>
+    </div>
+    <div></div>
+  </div>
+
+  <h3>Discord 截止前提醒</h3>
+  {% set rmode = "off" if a.reminder_hours == "off" else ("custom" if a.reminder_hours else "default") %}
+  <label class="check"><input type="radio" name="reminder_mode" value="default" {% if rmode == "default" %}checked{% endif %}> 使用系統預設（截止前 {{ default_reminder_hours() }} 小時）</label>
+  <label class="check"><input type="radio" name="reminder_mode" value="custom" {% if rmode == "custom" %}checked{% endif %}> 自訂：
+    <input type="text" name="reminder_custom" value="{{ a.reminder_hours if rmode == 'custom' else '' }}" placeholder="例如 3,1,0.5" style="width:160px;display:inline-block"> 小時前（逗號分隔，0.5 = 30 分鐘，最多 5 個）</label>
+  <label class="check"><input type="radio" name="reminder_mode" value="off" {% if rmode == "off" %}checked{% endif %}> 不提醒</label>
+  <div class="field-row">
+    <div>
+      <label>提醒時要 @ 的身分組</label>
+      <select name="discord_role">
+        <option value="">不提及（只發訊息）</option>
+        {% for r in discord_roles %}<option value="{{ r.id }}" {% if a.discord_role_id == r.id %}selected{% endif %}>@{{ r.label }}</option>{% endfor %}
+      </select>
+      <div class="help">身分組在「工作台 › Discord 設定」登記。提醒發到學員公告頻道，只提醒截止時間，不會列出誰還沒交。</div>
+    </div>
+    <div></div>
+  </div>
+
+  <h3>檔案規則</h3>
+  <label>允許檔案類型</label>
+  {% for t in system_types %}
+    <label class="check"><input type="checkbox" name="allowed_types" value="{{ t }}" {% if t in a.allowed_type_list %}checked{% endif %}> .{{ t }}{% if t == "jpg" %}（含 .jpeg）{% endif %}</label>
+  {% endfor %}
+  <div class="help">伺服器會做副檔名白名單＋檔案內容格式檢查。系統層上限由部署設定 AAMS_SYSTEM_ALLOWED_TYPES 決定。</div>
+  <label class="check"><input type="checkbox" id="allow_multiple_files" name="allow_multiple_files" value="1" {% if a.allow_multiple_files %}checked{% endif %}> 允許提交多個檔案</label>
+  <div class="field-row">
+    <div>
+      <label>每次最多檔案數</label>
+      <input type="number" id="max_files" name="max_files" min="1" max="10" value="{{ a.max_files }}">
+    </div>
+    <div>
+      <label>單次提交總容量（MB，1 MB = 1,000,000 bytes）</label>
+      <input type="number" name="max_total_mb" min="1" max="40" value="{{ (a.max_total_bytes // 1000000) }}">
+      <div class="help">指<strong>一次提交所有檔案合計</strong>，預設 20 MB，最高 40 MB。</div>
+    </div>
+  </div>
+
+  <h3>評分與公開</h3>
+  <div class="field-row">
+    <div>
+      <label>評分模式</label>
+      <select name="grading_mode">
+        <option value="BY_QUESTION" {% if a.grading_mode == "BY_QUESTION" %}selected{% endif %}>逐題給分（自動加總）</option>
+        <option value="DIRECT_TOTAL" {% if a.grading_mode == "DIRECT_TOTAL" %}selected{% endif %}>直接輸入總分</option>
+      </select>
+    </div>
+    <div>
+      <label>學員端成績顯示</label>
+      <select name="student_grade_visibility">
+        <option value="VISIBLE_AFTER_RELEASE" {% if a.student_grade_visibility == "VISIBLE_AFTER_RELEASE" %}selected{% endif %}>發布後顯示</option>
+        <option value="HIDDEN" {% if a.student_grade_visibility == "HIDDEN" %}selected{% endif %}>不對學員顯示（例如最終專題）</option>
+      </select>
+    </div>
+  </div>
+  <label class="check"><input type="checkbox" name="show_student_average" value="1" {% if a.show_student_average %}checked{% endif %}> 成績發布後向學員顯示各題平均（排除 0 分；樣本 &lt; 5 不顯示）</label>
+  <label class="check"><input type="checkbox" name="show_submission_rate" value="1" {% if a.show_submission_rate %}checked{% endif %}> 截止後向學員顯示繳交率</label>
+
+  <div class="actions"><button type="submit">{{ "建立並設定題目" if creating else "儲存設定" }}</button></div>
+</form>
+{% endblock %}

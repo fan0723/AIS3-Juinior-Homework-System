@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{{ u.name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › <a href="/admin/users">帳號</a> › {{ u.email }}</div>
+<h1 class="page-title">{{ u.name }}（#{{ u.id }}）</h1>
+<div class="grid cols-2">
+  <div class="card">
+    <h3>編輯（非機密欄位）</h3>
+    <form method="post" action="/admin/users/{{ u.id }}/edit">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>Email</label><input type="email" name="email" value="{{ u.email }}" required>
+      <label>姓名</label><input type="text" name="name" value="{{ u.name }}" required>
+      <div class="field-row">
+        <div><label>學校</label><input type="text" name="school" value="{{ u.school }}"></div>
+        <div><label>年級</label><input type="text" name="grade" value="{{ u.grade }}"></div>
+        <div><label>電話</label><input type="text" name="phone" value="{{ u.phone }}"></div>
+      </div>
+      <label>角色（變更會撤銷該使用者所有登入 Session）</label>
+      {% for r in ["STUDENT","TA","INSTRUCTOR","ADMIN"] %}<label class="check"><input type="checkbox" name="roles" value="{{ r }}" {% if r in u.role_set %}checked{% endif %}> {{ ROLE_LABELS[r] }}</label>{% endfor %}
+      <div class="actions"><button type="submit">儲存</button></div>
+    </form>
+    <p class="muted">Discord ID：{{ u.discord_id or "—" }} · 組別：{{ group.code if group else "—" }} · 帶組：{% for g in ta_groups %}{{ g.code }} {% else %}—{% endfor %}</p>
+  </div>
+  <div class="card">
+    <h3>帳號狀態</h3>
+    <p>狀態：<strong>{{ u.status }}</strong> · 建立 {{ fmt_dt(u.created_at) }} · 啟用 {{ fmt_dt(u.activated_at) }} · MFA {{ "已啟用" if mfa else "未啟用" }}</p>
+    <p>個資告知：{% if u.consented_at %}<span class="tag ok">已同意</span> {{ fmt_dt(u.consented_at) }}（IP {{ u.consent_ip or "—" }}）{% else %}<span class="tag warn">尚未同意</span>{% endif %}</p>
+    <form method="post" action="/admin/users/{{ u.id }}/status" data-confirm="確定變更帳號狀態？">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      {% if u.status == "DISABLED" %}<input type="hidden" name="action" value="enable"><button class="secondary" type="submit">重新啟用</button>
+      {% else %}<input type="hidden" name="action" value="disable"><button class="danger" type="submit">停用帳號</button>{% endif %}
+    </form>
+    <h3>核身後重設密碼</h3>
+    <form method="post" action="/admin/users/{{ u.id }}/reset-password" data-confirm="確定重設密碼？舊 Session 會全部失效。">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>核身紀錄（必填）</label><input type="text" name="verification_note" required maxlength="500" placeholder="例如：於服務台核對學生證與報名資料">
+      <div class="actions"><button class="secondary" type="submit">產生臨時密碼</button></div>
+    </form>
+    <h3>重設 MFA（遺失裝置）</h3>
+    <form method="post" action="/admin/users/{{ u.id }}/reset-mfa" data-confirm="確定移除此帳號的 MFA？">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>核身紀錄（必填）</label><input type="text" name="verification_note" required maxlength="500">
+      <div class="actions"><button class="secondary" type="submit">重設 MFA</button></div>
+    </form>
+  </div>
+</div>
+<div class="card">
+  <h3>相關稽核紀錄</h3>
+  <table class="compact">
+    <tr><th>時間</th><th>動作</th><th>目標</th><th>IP</th><th>內容</th></tr>
+    {% for e in events %}<tr><td>{{ fmt_dt(e.created_at) }}</td><td>{{ e.action }}</td><td>{{ e.target_type }} {{ e.target_id }}</td><td>{{ e.ip }}</td><td class="mono">{{ e.detail[:200] }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}相似度比對 · {{ a.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> › 相似度比對</div>
+<h1 class="page-title">PDF 相似度比對 <span class="tag dark">僅工作人員可見</span></h1>
+
+<div class="alert warn">系統只列出<strong>文字重疊比例高</strong>的組合，<strong>不會自動判定抄襲</strong>；請開啟兩份提交由人工判斷。題目敘述、講義範例等大家都會有的內容可能讓比例偏高。</div>
+
+<div class="card">
+  <h3>執行比對</h3>
+  <form method="post" action="/staff/assignments/{{ a.id }}/similarity" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>題目範本 PDF（選填）：範本裡的文字會被排除，不算重疊</label>
+    <input type="file" name="template" accept=".pdf">
+    <div class="help">比對每份提交「最新一版、通過檢查」的 PDF；{{ "團體作業只比對不同組之間" if a.submission_mode == "GROUP" else "個人作業比對所有學員之間" }}。
+      超過一半提交都有的段落會自動忽略。整份是截圖或掃描的 PDF 抽不到文字，會標示「無法比對」。</div>
+    <div class="actions"><button type="submit">開始比對</button>
+      {% if latest and latest.status in ("PENDING", "RUNNING") %}<span class="tag warn">比對進行中，請稍後重新整理</span>{% endif %}</div>
+  </form>
+</div>
+
+{% if latest %}
+<div class="card">
+  <h3>最近一次結果</h3>
+  <p class="muted">{{ fmt_dt(latest.created_at) }} · {{ users[latest.created_by].name if users[latest.created_by] else "?" }} ·
+    狀態 <strong>{{ {"PENDING": "等待中", "RUNNING": "比對中", "DONE": "完成", "FAILED": "失敗"}[latest.status] }}</strong>
+    {% if latest.template_name %}· 範本 {{ latest.template_name }}{% endif %} {% if latest.detail %}· {{ latest.detail }}{% endif %}</p>
+  {% if result %}
+    {% set no_text = result.docs|selectattr("status", "equalto", "NO_TEXT")|list %}
+    {% if no_text %}
+      <div class="alert info">無法比對（抽不到文字，可能是截圖或掃描檔）：{% for d in no_text %}{{ d.label }}{% if not loop.last %}、{% endif %}{% endfor %}</div>
+    {% endif %}
+    {% if result.pairs %}
+    <table>
+      <tr><th>相似度</th><th>提交 A</th><th>提交 B</th><th>重疊片段</th><th>重疊段落</th></tr>
+      {% for p in result.pairs %}
+      <tr>
+        <td><span class="pct {% if p.containment >= 0.5 %}high{% endif %}">{{ "%.0f"|format(p.containment * 100) }}%</span>
+          <div class="muted">Jaccard {{ "%.0f"|format(p.jaccard * 100) }}%</div></td>
+        <td><a href="/staff/submissions/{{ p.a_sub }}">{{ p.a_label }}</a></td>
+        <td><a href="/staff/submissions/{{ p.b_sub }}">{{ p.b_label }}</a></td>
+        <td>{{ p.shared }}</td>
+        <td>{% if p.passages %}<details><summary>{{ p.passages|length }} 段</summary>
+          {% for s in p.passages %}<div class="sim-passage">{{ s }}</div>{% endfor %}</details>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="muted">相似度 = 兩份共同片段數 ÷ 較短那份的片段數（排除共同內容後）。只列出 ≥ 15% 的組合，最多 100 組。</p>
+    {% else %}<p><span class="tag ok">沒有發現明顯重疊</span>（所有組合都低於 15%）。</p>{% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if runs|length > 1 %}
+<div class="card">
+  <details><summary>較早的比對紀錄（{{ runs|length - 1 }}）</summary>
+    <table class="compact">{% for r in runs[1:] %}<tr><td>{{ fmt_dt(r.created_at) }}</td><td>{{ r.status }}</td><td>{{ r.detail }}</td></tr>{% endfor %}</table>
+  </details>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}稽核紀錄{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 稽核</div>
+<h1 class="page-title">稽核紀錄（最近 500 筆）</h1>
+<div class="card">
+  <form method="get" class="field-row">
+    <div><input type="text" name="action" value="{{ action }}" placeholder="動作前綴，例如 auth. / grade. / export."></div>
+    <div><button class="secondary" type="submit">篩選</button></div>
+  </form>
+  <table class="compact" style="margin-top:10px">
+    <tr><th>時間</th><th>操作者</th><th>動作</th><th>目標</th><th>IP</th><th>內容</th></tr>
+    {% for e in events %}
+    <tr><td>{{ fmt_dt(e.created_at) }}</td><td>{{ actors[e.actor_id].email if e.actor_id and actors[e.actor_id] else "—" }}</td>
+      <td>{{ e.action }}</td><td>{{ e.target_type }} {{ e.target_id }}</td><td>{{ e.ip }}</td><td class="mono">{{ e.detail[:300] }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

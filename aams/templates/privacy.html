@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}個資告知{% endblock %}
+{% block content %}
+<h1 class="page-title">個人資料蒐集告知</h1>
+<div class="card">
+  {% include "_privacy_text.html" %}
+  {% if viewer and viewer.consented_at %}<p class="muted">你已於 {{ fmt_dt(viewer.consented_at) }}（台北時間）同意本告知。</p>{% endif %}
+  <p><a href="/">回首頁</a></p>
+</div>
+{% endblock %}

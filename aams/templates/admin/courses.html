@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}課程管理{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 課程</div>
+<h1 class="page-title">課程管理</h1>
+<div class="card">
+  <h3>新增課程</h3>
+  <form method="post" action="/admin/courses">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="field-row">
+      <div><label>課程名稱</label><input type="text" name="title" required maxlength="200"></div>
+      <div><label>英文名稱（下載檔名用）</label><input type="text" name="name_en" maxlength="40" pattern="[A-Za-z0-9_\-]*" placeholder="例如 WebSecurity"></div>
+      <div><label>排序</label><input type="number" name="ordinal" value="0"></div>
+    </div>
+    <label>說明</label><textarea name="description" rows="3"></textarea>
+    <div class="actions"><button type="submit">建立（預設未發布）</button></div>
+  </form>
+</div>
+<div class="card">
+  <table>
+    <tr><th>課程</th><th>狀態／英文名稱／排序</th><th>講師</th><th>指派講師</th></tr>
+    {% for x in rows %}
+    <tr>
+      <td><a href="/staff/courses/{{ x.c.id }}">{{ x.c.title }}</a></td>
+      <td>
+        <form method="post" action="/admin/courses/{{ x.c.id }}/update">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <input type="hidden" name="title" value="{{ x.c.title }}">
+          <select name="status"><option value="DRAFT" {% if x.c.status != "PUBLISHED" %}selected{% endif %}>未發布</option><option value="PUBLISHED" {% if x.c.status == "PUBLISHED" %}selected{% endif %}>已發布</option></select>
+          <input type="text" name="name_en" value="{{ x.c.name_en }}" maxlength="40" pattern="[A-Za-z0-9_\-]*" placeholder="英文名稱" style="width:140px">
+          <input type="number" name="ordinal" value="{{ x.c.ordinal }}" style="width:80px">
+          <button class="small" type="submit">更新</button>
+        </form>
+      </td>
+      <td>{% for i in x.instructors %}
+        <form class="inline" method="post" action="/admin/courses/{{ x.c.id }}/instructors">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="instructor_id" value="{{ i.id }}"><input type="hidden" name="action" value="remove">
+          <span class="tag dark">{{ i.name }}</span> <button class="small secondary" type="submit">×</button></form>
+      {% else %}<span class="muted">—</span>{% endfor %}</td>
+      <td>
+        <form method="post" action="/admin/courses/{{ x.c.id }}/instructors">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="action" value="add">
+          <select name="instructor_id">{% for i in instructors %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}</select>
+          <button class="small" type="submit">加入</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}<tr><td colspan="4" class="muted">尚無課程</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

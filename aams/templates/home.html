@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}課程首頁{% endblock %}
+{% block content %}
+<h1 class="page-title">嗨，{{ me.name }}{% if group %} · {{ group.label }}{% endif %}</h1>
+
+{% if anns %}
+<div class="card">
+  <h2>全營公告 <a class="small" href="/announcements">（全部公告）</a></h2>
+  {% for a in anns %}
+  <div class="ann {% if a.pinned %}pinned{% endif %}">
+    <h4>{{ a.title }}</h4>
+    <div class="muted">{{ fmt_dt(a.created_at, False) }}</div>
+    <div class="ann-body">{{ a.body }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if upcoming %}
+<div class="card">
+  <h2>我的作業</h2>
+  <table>
+    <tr><th>課程</th><th>作業</th><th>類型</th><th>截止時間（台北）</th><th>狀態</th></tr>
+    {% for x in upcoming %}
+    <tr>
+      <td>{{ x.course.title }}</td>
+      <td><a href="/assignments/{{ x.a.id }}">{{ x.a.title }}</a></td>
+      <td>{% if x.a.submission_mode == "GROUP" %}<span class="tag info">團體</span>{% else %}<span class="tag">個人</span>{% endif %}</td>
+      <td>{{ fmt_dt(x.a.due_at, False) }}{% if x.past_due %} <span class="tag late">已截止</span>{% else %} <span class="countdown" data-countdown="{{ (x.a.due_at - now).total_seconds() }}">剩 …</span>{% endif %}</td>
+      <td>
+        {% if x.latest %}
+          <span class="tag ok">已交第 {{ x.latest.revision_no }} 版</span>
+          {% if x.latest.is_late %}<span class="tag late">LATE／補交</span>{% endif %}
+        {% else %}
+          <span class="tag warn">尚未繳交</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<h2 class="page-title">課程列表</h2>
+<div class="grid cols-3">
+  {% for x in cards %}
+  <a class="card course-card" href="/courses/{{ x.course.id }}">
+    <h3>{{ x.course.title }}{% if x.course.status != "PUBLISHED" %} <span class="tag warn">未發布</span>{% endif %}</h3>
+    <p class="muted">{{ (x.course.description or "")[:80] }}{% if (x.course.description or "")|length > 80 %}…{% endif %}</p>
+    <span class="tag">{{ x.n_assignments }} 份作業</span>
+  </a>
+  {% else %}
+  <div class="card">目前尚無已發布的課程。</div>
+  {% endfor %}
+</div>
+{% endblock %}

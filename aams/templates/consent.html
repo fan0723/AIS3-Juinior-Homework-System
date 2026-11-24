@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}個資告知與同意{% endblock %}
+{% block content %}
+<div class="consent-wrap">
+  <div class="card">
+    <h2>個人資料蒐集告知與同意</h2>
+    <p class="muted">帳號：{{ user.email }}。第一次使用本系統前，請完整閱讀以下內容，並逐項勾選同意後才能繼續{% if pending %}設定密碼、開通帳號{% endif %}。</p>
+    {% if error %}<div class="alert bad">{{ error }}</div>{% endif %}
+    <div class="consent-scroll" id="consent-scroll" tabindex="0">
+      {% include "_privacy_text.html" %}
+      <p class="consent-end muted">— 告知內容到此結束 —</p>
+    </div>
+    <div class="help" id="consent-hint">請將上方內容捲動到底，才能勾選同意。</div>
+    <form method="post" action="/consent" id="consent-form" data-scroll-gate="consent-scroll">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      {% for key, text in items %}
+        <label class="check"><input type="checkbox" name="items" value="{{ key }}" required> {{ text }}</label>
+      {% endfor %}
+      <div class="actions"><button type="submit">我已閱讀並同意，繼續</button></div>
+    </form>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="secondary small" type="submit">不同意，登出</button></form>
+  </div>
+</div>
+{% endblock %}

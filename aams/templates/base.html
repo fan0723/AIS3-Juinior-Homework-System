@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1100">
+  <title>{% block title %}首頁{% endblock %}｜AIS3 Junior 作業繳交系統</title>
+  {% if has_local_brand_asset('logo.png') %}<link rel="icon" href="/static/local/logo.png">{% endif %}
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body{% if has_local_brand_asset('bg.jpg') %} class="with-local-bg"{% endif %}>
+<header class="topbar">
+  <a class="brand" href="/">{% if has_local_brand_asset('logo.png') %}<img src="/static/local/logo.png" alt="AIS3 Junior">{% endif %}<span>AIS3 Junior 作業繳交系統 <small>{{ settings.event_name }}</small></span></a>
+  {% if me %}
+  <nav class="main">
+    <a href="/">課程首頁</a>
+    <a href="/announcements">公告{% if ann_unread %}<span class="badge-count">{{ ann_unread }}</span>{% endif %}</a>
+    <a href="/downloads">批次下載</a>
+    {% if ctx.is_staff %}<a href="/staff">工作台</a>{% endif %}
+    {% if ctx.is_admin %}<a href="/admin">管理後台</a>{% endif %}
+    <a href="/notifications">通知{% if unread %}<span class="badge-count">{{ unread }}</span>{% endif %}</a>
+  </nav>
+  <div class="userbox">
+    <a href="/me">{{ me.name }}</a>
+    <span style="color:#d9c7bb;font-size:13px">{% for r in me.role_set|sort %}{{ ROLE_LABELS[r] }}{% if not loop.last %}／{% endif %}{% endfor %}</span>
+    <form class="inline" method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="small secondary" type="submit">登出</button></form>
+  </div>
+  {% endif %}
+</header>
+<main class="container">
+  {% if flash %}<div class="alert {{ flash_kind }}">{{ flash }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="foot">AIS3 Junior 作業繳交系統 · 僅限活動內網使用 · <a href="/privacy">個資告知</a></footer>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

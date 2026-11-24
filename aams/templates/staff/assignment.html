@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ a.title }}（工作人員）{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › {% if manage %}<a href="/staff/courses/{{ course.id }}">{{ course.title }}</a>{% else %}{{ course.title }}{% endif %} › {{ a.title }}</div>
+<h1 class="page-title">{{ a.title }}</h1>
+<div class="card">
+  <p>{{ "團體作業" if a.submission_mode == "GROUP" else "個人作業" }} · 截止 {{ fmt_dt(a.due_at) }} ·
+    {% if a.status == "PUBLISHED" %}<span class="tag ok">已發布給學員</span>{% else %}<span class="tag warn">草稿</span>{% endif %}
+    {% if batch %}<span class="tag info">成績已發布第 {{ batch.release_no }} 次</span>{% else %}<span class="tag">成績未發布</span>{% endif %}
+    · 題目 {{ questions|length }} 題</p>
+  {% if manage %}
+  <div class="actions">
+    <a class="btn secondary" href="/staff/assignments/{{ a.id }}/edit">作業設定</a>
+    <a class="btn secondary" href="/staff/assignments/{{ a.id }}/questions">題目／Rubric</a>
+    <a class="btn secondary" href="/staff/assignments/{{ a.id }}/tasks">批改任務</a>
+    <a class="btn secondary" href="/staff/assignments/{{ a.id }}/stats">統計</a>
+    <a class="btn secondary" href="/staff/assignments/{{ a.id }}/similarity">相似度比對</a>
+    <a class="btn secondary" href="/downloads?assignment_id={{ a.id }}">批次下載</a>
+    <a class="btn" href="/staff/assignments/{{ a.id }}/release">統一發布成績</a>
+  </div>
+  {% else %}
+  <p class="muted">你只能看到帶領的組別與被指派任務的組別。 <a href="/downloads?assignment_id={{ a.id }}">批次下載這些組別的檔案</a></p>
+  {% endif %}
+</div>
+{% if manage %}
+<div class="card">
+  <h3>Discord 截止提醒 <a class="small" href="/staff/discord">（Discord 設定）</a></h3>
+  {% if not slots %}<p class="muted">這份作業已關閉截止提醒。</p>
+  {% else %}
+  <p>{% for s in slots %}<span class="tag {% if s.state == 'SENT' %}ok{% elif s.state == 'PENDING' %}info{% endif %}">截止前 {{ hours_label(s.hours) }} · {{ fmt_dt(s.at, False) }} ·
+    {{ {"PENDING": "待發送", "SENT": "已發送", "SKIPPED": "已略過", "PAST": "已過"}[s.state] }}</span> {% endfor %}
+    {% if reminder_role %}<span class="tag info">@{{ reminder_role.label }}</span>{% else %}<span class="muted">不 @ 任何人</span>{% endif %}</p>
+  {% if reminder_blocked %}<p><span class="tag warn">目前不會發送</span> 原因：{{ reminder_blocked }}</p>{% endif %}
+  {% endif %}
+</div>
+{% endif %}
+<div class="card">
+  <h3>繳交列表</h3>
+  <table>
+    <tr><th>{{ "組別" if a.submission_mode == "GROUP" else "學員" }}</th><th>最新版本</th><th>收件時間</th><th>準時</th><th>檔案檢查</th><th>已發布版本／最新</th><th>評分</th><th></th></tr>
+    {% for u in units %}
+    <tr>
+      <td>{{ u.label }}{% if u.group_id in task_groups %} <span class="tag info">我的任務</span>{% endif %}</td>
+      {% if u.latest %}
+      <td>第 {{ u.latest.revision_no }} 版 <span class="muted">（共 {{ revcounts[u.submission.id] }} 次）</span></td>
+      <td>{{ fmt_dt(u.latest.finalized_at) }}</td>
+      <td>{% if u.latest.is_late %}<span class="tag late">LATE</span>{% else %}<span class="tag ok">ON_TIME</span>{% endif %}</td>
+      <td>{% if u.latest.scan_state == "ACCEPTED" %}<span class="tag ok">通過</span>{% elif u.latest.scan_state == "REJECTED" %}<span class="tag bad">未通過</span>{% else %}<span class="tag warn">檢查中</span>{% endif %}</td>
+      <td>{% if u.target and u.latest.revision_no != u.target.revision_no %}<span class="tag warn">最新版未通過檢查</span>{% endif %}</td>
+      <td>
+        {% if manage or u.group_id in task_groups %}
+          {% if u.scores and u.scores.complete %}<span class="tag ok">{{ fmt_score(u.scores.final) }}</span>{% elif u.target %}<span class="tag warn">未完成</span>{% endif %}
+        {% else %}<span class="muted">無批改權</span>{% endif %}
+      </td>
+      <td><a href="/staff/submissions/{{ u.submission.id }}">開啟</a></td>
+      {% else %}
+      <td colspan="7"><span class="tag warn">尚未繳交</span></td>
+      {% endif %}
+    </tr>
+    {% else %}<tr><td colspan="8" class="muted">沒有可見的繳交單位</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

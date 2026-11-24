@@ -1,0 +1,81 @@
+# AAMS 正式部署（WireGuard 內網 + HTTPS）
+# 用法：cp deploy/env.example .env.docker && 編輯 → docker compose --env-file .env.docker up -d --build
+name: aams
+
+services:
+  db:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aams
+      POSTGRES_USER: aams
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [backend]          # 不對外開 port
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      AAMS_SECRET_KEY: ${AAMS_SECRET_KEY:?set AAMS_SECRET_KEY}
+      AAMS_DATABASE_URL: postgresql+psycopg://aams:${POSTGRES_PASSWORD}@db:5432/aams
+      AAMS_PREVIEW_URL: https://${AAMS_DOMAIN}:8443
+      AAMS_COOKIE_SECURE: "true"
+      AAMS_FORWARDED_ALLOW_IPS: "*"   # 只有 caddy 能連到 app（frontend 網段內）
+      AAMS_INSPECTOR_MODE: spool
+      AAMS_EVENT_NAME: ${AAMS_EVENT_NAME:-AIS3 Junior 2026}
+      AAMS_EVENT_END_AT: ${AAMS_EVENT_END_AT:-}
+      AAMS_SYSTEM_ALLOWED_TYPES: ${AAMS_SYSTEM_ALLOWED_TYPES:-pdf,png,jpg,txt}
+      # Discord 頻道通知（留空 = 不傳送）。app 需能對外連到 discord.com（frontend 網段非 internal）
+      AAMS_DISCORD_STAFF_WEBHOOK: ${AAMS_DISCORD_STAFF_WEBHOOK:-}
+      AAMS_DISCORD_STUDENT_WEBHOOK: ${AAMS_DISCORD_STUDENT_WEBHOOK:-}
+      AAMS_REMINDER_HOURS: ${AAMS_REMINDER_HOURS:-}
+    volumes:
+      - appdata:/data
+      - spool:/data/spool
+    networks: [backend, frontend]
+
+  # 檔案檢查 worker：無網路、唯讀檔案系統、只掛載 spool，拿不到 DB 憑證或其他學生檔案
+  inspector:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-I", "/app/aams/inspector.py", "--spool", "/spool"]
+    network_mode: none
+    read_only: true
+    environment: {}
+    volumes:
+      - spool:/spool
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      AAMS_DOMAIN: ${AAMS_DOMAIN:?set AAMS_DOMAIN}
+    ports:
+      # 只綁在 WireGuard 介面 IP（例如 10.66.0.1），不要綁 0.0.0.0
+      - "${AAMS_BIND_IP:?set AAMS_BIND_IP}:443:443"
+      - "${AAMS_BIND_IP}:8443:8443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+    networks: [frontend]
+
+networks:
+  backend:
+    internal: true
+  frontend: {}
+
+volumes:
+  pgdata: {}
+  appdata: {}
+  spool: {}
+  caddydata: {}

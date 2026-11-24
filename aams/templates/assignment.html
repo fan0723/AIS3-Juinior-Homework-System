@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}{{ a.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/">課程首頁</a> › <a href="/courses/{{ course.id }}">{{ course.title }}</a> › {{ a.title }}</div>
+<h1 class="page-title">{{ a.title }}</h1>
+
+<div class="two-col">
+<div>
+  <div class="card">
+    <h3>作業說明</h3>
+    <div style="white-space:pre-wrap">{{ a.description or "（無）" }}</div>
+    <table class="compact" style="margin-top:12px">
+      <tr><th>繳交方式</th><td>{% if a.submission_mode == "GROUP" %}團體作業（任一組員可代全組提交／重交）{% else %}個人作業{% endif %}</td></tr>
+      <tr><th>伺服器時間</th><td><span class="server-clock" data-server-epoch="{{ server_epoch }}">{{ fmt_dt(now) }}</span>（以此為準，不是你電腦的時間）</td></tr>
+      <tr><th>截止時間</th><td>{{ fmt_dt(a.due_at) }}（台北時間）
+        {% if is_late_now %}<span class="tag late">已截止</span>{% else %}<span class="countdown" data-countdown="{{ due_in }}" data-done-text="已截止">剩 …</span>{% endif %}</td></tr>
+      <tr><th>遲交</th><td>{% if a.allow_late %}截止後仍可上傳，但會標記 <span class="tag late">LATE／補交</span>（不自動扣分）{% else %}截止後不接受提交{% endif %}</td></tr>
+      {% if a.allow_late %}
+      <tr><th>最終收件期限</th><td>{{ fmt_dt(final_at) }}（台北時間），超過後系統<strong>一律拒收</strong>
+        {% if past_final %}<span class="tag bad">已停止收件</span>{% elif is_late_now %}<span class="countdown" data-countdown="{{ final_in }}" data-done-text="已停止收件">剩 …</span>{% endif %}</td></tr>
+      {% endif %}
+      <tr><th>允許檔案類型</th><td>{% for t in a.allowed_type_list %}<span class="tag">.{{ t }}</span> {% endfor %}</td></tr>
+      <tr><th>單次提交</th><td>{% if a.allow_multiple_files %}最多 {{ a.max_files }} 個檔案{% else %}1 個檔案{% endif %}，所有檔案<strong>合計</strong>不超過 {{ fmt_bytes(a.max_total_bytes) }}</td></tr>
+      <tr><th>版本</th><td>可無限次重新提交，系統保留最近 5 個版本的檔案</td></tr>
+    </table>
+  </div>
+
+  {% if a.submission_mode == "GROUP" %}
+  <div class="card">
+    <h3>我的組別</h3>
+    {% if group %}
+      <p>{{ group.label }}（{{ group.code }}）：{% for m in members %}{{ m.name }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+    {% else %}
+      <div class="alert warn">你目前沒有所屬組別，無法提交團體作業，請聯絡工作人員。</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if release %}
+  <div class="card">
+    <h3>成績（第 {{ release.batch.release_no }} 次發布）</h3>
+    {% if latest_no > release.rg.revision_no %}
+      <div class="alert warn">已發布的是第 {{ release.rg.revision_no }} 版的成績；你最新提交的第 {{ latest_no }} 版待助教處理。新成績需重新發布後才會更新。</div>
+    {% endif %}
+    {% if release.rg.visibility == "HIDDEN" %}
+      <p class="muted">本作業成績不在學員端公開。</p>
+    {% else %}
+      <p class="kpi">{{ fmt_score(release.rg.score) }} <span class="muted">/ {{ release.snap.max_total }}</span></p>
+      {% if release.snap.is_late %}<span class="tag late">該版本為 LATE／補交</span>{% endif %}
+      <table class="compact">
+        <tr><th>題目</th><th>得分</th><th>評語</th></tr>
+        {% for q in release.snap.questions %}
+        <tr><td>{{ q.ordinal }}. {{ q.title }}</td><td>{{ q.score if q.score is not none else "—" }} / {{ q.max }}</td><td style="white-space:pre-wrap">{{ q.feedback }}</td></tr>
+        {% endfor %}
+      </table>
+      {% if release.snap.summary_feedback %}
+      <h4>整體回饋</h4><div style="white-space:pre-wrap">{{ release.snap.summary_feedback }}</div>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if release and release.rg.visibility != "HIDDEN" %}
+  <div class="card" id="appeals">
+    <h3>成績申覆</h3>
+    {% if appeal_deadline and now <= appeal_deadline %}
+      <p class="muted">對成績有疑問時，可在 <strong>{{ fmt_dt(appeal_deadline, False) }}</strong>（第一次發布成績後 3 天）前提出申覆，由講師處理。</p>
+      <form method="post" action="/assignments/{{ a.id }}/appeals">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <label>針對</label>
+        <select name="question_id">
+          {% for q in questions %}<option value="{{ q.id }}">Q{{ q.ordinal }} {{ q.title }}</option>{% endfor %}
+          <option value="total">總分</option>
+        </select>
+        <label>申覆理由</label>
+        <textarea name="reason" rows="3" maxlength="2000" required placeholder="請具體說明哪裡的評分有疑問，以及你的理由"></textarea>
+        <div class="actions"><button class="small" type="submit">提出申覆</button></div>
+      </form>
+    {% else %}
+      <p class="muted">申覆期限已過（{{ fmt_dt(appeal_deadline, False) if appeal_deadline else "—" }}）。</p>
+    {% endif %}
+    {% for ap in appeals %}
+      <div class="ann">
+        <h4>{% if ap.question_id %}Q{{ qmap[ap.question_id].ordinal }} {{ qmap[ap.question_id].title }}{% else %}總分{% endif %}
+          <span class="tag {% if ap.status == 'OPEN' %}warn{% elif ap.status == 'CHANGED' %}ok{% endif %}">{{ appeal_labels[ap.status] }}</span></h4>
+        <div class="muted">{{ fmt_dt(ap.created_at) }}</div>
+        <div class="ann-body">{{ ap.reason }}</div>
+        {% if ap.response %}<p><strong>講師回覆：</strong></p><div class="ann-body">{{ ap.response }}</div>
+          {% if ap.status == "CHANGED" %}<p class="muted">分數更新後需由講師重新發布才會顯示在上方。</p>{% endif %}{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if stats %}
+  <div class="card">
+    <h3>全營隊平均（排除 0 分與未評分）</h3>
+    <table class="compact">
+      <tr><th>項目</th><th>平均</th><th>有效樣本數</th></tr>
+      {% for q in stats.questions %}<tr><td>{{ q.title }}</td><td>{{ q.avg or "樣本不足，不公開" }}</td><td>{{ q.n }}</td></tr>{% endfor %}
+      <tr><th>總分</th><td>{{ stats.final.avg or "樣本不足，不公開" }}</td><td>{{ stats.final.n }}</td></tr>
+    </table>
+    <p class="muted">為保護個人隱私，有效樣本少於 5 時不顯示；此平均排除 0 分，並非全體平均。</p>
+  </div>
+  {% endif %}
+  {% if rate %}<div class="card"><h3>繳交率</h3><p>{{ rate[0] }} / {{ rate[1] }}（{{ "%.0f"|format(rate[0] / rate[1] * 100 if rate[1] else 0) }}%）</p></div>{% endif %}
+</div>
+
+<div>
+  <div class="card sticky">
+    <h3>提交作業</h3>
+    {% if can_submit %}
+      {% if is_late_now %}<div class="red-banner">已超過截止時間：這次提交會被標記為 LATE／補交。最終收件期限：{{ fmt_dt(final_at, False) }}。</div>
+      {% elif due_in <= 3600 %}<div class="red-banner">距離截止不到 1 小時，請盡快提交！</div>{% endif %}
+      {% if any_released %}<div class="alert warn">本作業成績已發布。重新提交可能需要重新批改，已發布的成績不會自動改變。</div>{% endif %}
+      <form method="post" action="/assignments/{{ a.id }}/submit" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <input type="hidden" name="idempotency_key" value="{{ idem }}">
+        <input type="file" name="files" accept="{{ accept }}" {% if a.allow_multiple_files %}multiple{% endif %} required
+               data-max-total="{{ a.max_total_bytes }}" data-max-files="{{ a.max_files if a.allow_multiple_files else 1 }}"
+               data-info="upload-info" data-meter="upload-meter" data-list="upload-list">
+        <div class="upload-meter" id="upload-meter"><div></div></div>
+        <div class="help" id="upload-info">上限：所有檔案合計 {{ fmt_bytes(a.max_total_bytes) }}</div>
+        <ul id="upload-list" class="muted"></ul>
+        {% if is_late_now or any_released %}
+          <label class="check"><input type="checkbox" name="late_ack" value="1" required> 我了解這次提交屬於補交／重交，可能需要重新批改。</label>
+        {% endif %}
+        <div class="actions"><button type="submit">送出{% if a.submission_mode == "GROUP" %}（代表全組）{% endif %}</button></div>
+      </form>
+      <p class="muted">送出後會取得收據；檔案還需通過安全檢查才能被預覽。</p>
+    {% else %}
+      <div class="alert warn">
+        {% if not a.accepting_submissions %}此作業目前不開放收件。{% elif is_late_now and not a.allow_late %}已超過截止時間，不接受遲交。{% elif past_final %}已超過最終收件期限（{{ fmt_dt(final_at, False) }}），系統不再收件。{% else %}目前無法提交。{% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+</div>
+
+<div class="card">
+  <h3>提交紀錄{% if a.submission_mode == "GROUP" %}（全組共用）{% endif %}</h3>
+  {% if revisions %}
+  <table>
+    <tr><th>版本</th><th>提交者</th><th>收件時間（台北）</th><th>準時</th><th>檔案檢查</th><th>檔案</th><th></th></tr>
+    {% for x in revisions %}
+    <tr>
+      <td>第 {{ x.r.revision_no }} 版{% if loop.first %} <span class="tag dark">最新</span>{% endif %}</td>
+      <td>{{ x.uploader.name if x.uploader else "?" }}</td>
+      <td>{{ fmt_dt(x.r.finalized_at) }}</td>
+      <td>{% if x.r.is_late %}<span class="tag late">LATE</span>{% else %}<span class="tag ok">ON_TIME</span>{% endif %}</td>
+      <td>{% if x.r.scan_state == "ACCEPTED" %}<span class="tag ok">通過</span>{% elif x.r.scan_state == "REJECTED" %}<span class="tag bad">未通過</span>{% else %}<span class="tag warn">檢查中</span>{% endif %}</td>
+      <td>
+        {% if x.r.purged_at %}<span class="muted">檔案已依「只保留 5 版」規則淘汰</span>{% else %}
+        {% for f in x.arts %}
+          <div>{{ f.original_filename }} <span class="muted">({{ fmt_bytes(f.size) }})</span>
+          {% if f.inspection_state == "ACCEPTED" %}<a href="/artifacts/{{ f.id }}/preview">預覽</a> · <a href="/artifacts/{{ f.id }}/download">下載</a>
+          {% elif f.inspection_state == "REJECTED" %}<span class="tag bad">{{ f.inspection_detail }}</span>{% endif %}</div>
+        {% endfor %}{% endif %}
+      </td>
+      <td><a href="/revisions/{{ x.r.id }}/receipt">收據</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">尚未提交。</p>{% endif %}
+</div>
+{% endblock %}

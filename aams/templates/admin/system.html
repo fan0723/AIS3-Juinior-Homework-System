@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}系統資訊{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 系統</div>
+<h1 class="page-title">系統資訊</h1>
+
+<div class="alert bad"><strong>⚠️ 這個版本還沒做自動備份。</strong>請依部署手冊用 <span class="mono">python manage.py backup</span> 手動備份，並把備份檔複製到另一台機器。</div>
+{% if not event_end_ok %}<div class="alert warn">尚未設定（或格式錯誤）營隊結束日 <span class="mono">AAMS_EVENT_END_AT</span>：新作業的「最終收件期限」預設會改用「截止時間 + 7 天」。格式例：<span class="mono">2026-07-10</span>。</div>{% endif %}
+
+<div class="card">
+  <h3>目前狀態檢查</h3>
+  {% if current %}
+    {% for key, msg in current %}<div class="alert bad">{{ msg }}</div>{% endfor %}
+  {% else %}<p><span class="tag ok">正常</span> 磁碟空間、檔案檢查佇列、伺服器錯誤、登入失敗都沒有超過門檻。</p>{% endif %}
+  <p class="muted">背景程式每分鐘自動檢查一次；異常時發到 Discord staff 頻道（同一種警示 {{ settings.alert_repeat_minutes }} 分鐘內只發一次）。
+    門檻：磁碟剩餘 &lt; {{ settings.alert_disk_free_pct }}%、佇列等待 &gt; {{ settings.alert_queue_minutes }} 分鐘、5 分鐘內錯誤 ≥ {{ settings.alert_errors_5min }} 次、
+    5 分鐘內同一 IP 登入失敗 ≥ {{ settings.alert_login_fail_ip_5min }} 次或同一帳號 ≥ {{ settings.alert_login_fail_account_5min }} 次。</p>
+  {% if recent %}
+  <h4>最近發出的警示</h4>
+  <table class="compact">
+    <tr><th>時間</th><th>內容</th></tr>
+    {% for r in recent %}<tr><td>{{ fmt_dt(r.at) }}</td><td>{{ r.msg }}</td></tr>{% endfor %}
+  </table>
+  {% endif %}
+</div>
+
+<div class="card" id="locks">
+  <h3>密碼錯誤鎖定</h3>
+  <p class="muted">登入：同一帳號在同一個 IP 連續錯 5 次 → 鎖 5 分鐘；解鎖後再錯 3 次 → 鎖 15 分鐘。登入成功或 1 小時沒再錯就歸零。
+    鎖的是「帳號＋IP」，不影響本人在其他裝置登入。學員急著交作業時，確認是本人後可以在這裡直接解除。伺服器重新啟動也會全部清除。</p>
+  {% if locks.login %}
+  <table class="compact">
+    <tr><th>帳號</th><th>IP</th><th>剩餘</th><th></th></tr>
+    {% for x in locks.login %}
+    <tr><td>{% if x.user %}<a href="/admin/users/{{ x.user.id }}">{{ x.user.name }}</a> <span class="muted">{{ x.email }}</span>{% else %}<span class="muted">{{ x.email }}（不存在的帳號）</span>{% endif %}</td>
+      <td class="mono">{{ x.ip }}</td>
+      <td>{{ fmt_wait(x.secs) }}{% if x.tier > 1 %} <span class="tag warn">第 {{ x.tier }} 次</span>{% endif %}</td>
+      <td><form class="inline" method="post" action="/admin/system/unlock" data-confirm="確認已核對是本人？解除後對方可以立即再試。">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="kind" value="login"><input type="hidden" name="key" value="{{ x.key }}">
+        <button class="small secondary" type="submit">解除</button></form></td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p><span class="tag ok">目前沒有被鎖住的登入</span></p>{% endif %}
+
+  <h4>修改 Discord 設定的密碼確認</h4>
+  <p class="muted">管理員修改 Webhook 時密碼錯 5 次 → 鎖 15 分鐘，並通知 staff 頻道。只能由<strong>另一位</strong>管理員解除（避免帳號被盜用的人自己解鎖）。</p>
+  {% if locks.webhook %}
+  <table class="compact">
+    <tr><th>管理員</th><th>剩餘</th><th></th></tr>
+    {% for x in locks.webhook %}
+    <tr><td>{{ x.user.name if x.user else "?" }}</td><td>{{ fmt_wait(x.secs) }}</td>
+      <td>{% if x.key == me.id|string %}<span class="muted">請另一位管理員解除</span>{% else %}
+        <form class="inline" method="post" action="/admin/system/unlock" data-confirm="確認是 {{ x.user.name if x.user else '' }} 本人操作、帳號沒有被盜用？">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="kind" value="webhook"><input type="hidden" name="key" value="{{ x.key }}">
+        <button class="small secondary" type="submit">解除</button></form>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p><span class="tag ok">沒有</span></p>{% endif %}
+</div>
+
+<div class="card" id="discord">
+  <h3>Discord 頻道通知</h3>
+  <p class="muted">只有管理員（staff）看得到、改得了這一區。Webhook 網址等於密碼：存入後會<strong>加密</strong>存放，網頁上<strong>不再顯示完整網址</strong>，只顯示 Webhook ID 方便辨認。
+    伺服器 <span class="mono">.env</span> 有填的頻道以 .env 為準，這裡會鎖住不能改。</p>
+  {% for ch in discord.invalid %}<div class="alert warn">.env 裡 {{ ch }} 頻道的 Webhook 格式不正確（必須是 https://discord.com/api/webhooks/數字/Token），已忽略。</div>{% endfor %}
+  {% for c in discord.channels %}
+  <div class="ann">
+    <h4>{{ c.label }} <span class="muted">（{{ c.use }}）</span></h4>
+    {% if c.source == "env" %}
+      <p>{% if c.ok %}<span class="tag ok">✓ 已設定</span>{% else %}<span class="tag bad">格式錯誤（不傳送）</span>{% endif %}
+        <span class="tag">🔒 由伺服器 .env 設定</span>{% if c.webhook_id %} <span class="muted">Webhook ID {{ c.webhook_id }}</span>{% endif %}</p>
+      <p class="muted">要更換請編輯伺服器的 <span class="mono">.env</span>（<span class="mono">AAMS_DISCORD_{{ c.ch|upper }}_WEBHOOK</span>）後重新啟動；若想改由網頁管理，把那一行清空再重新啟動。</p>
+    {% elif c.source == "web" %}
+      <p>{% if c.ok %}<span class="tag ok">✓ 已設定</span> <span class="muted">Webhook ID {{ c.webhook_id }} · Token 已隱藏</span>
+        {% else %}<span class="tag bad">無法使用</span>{% endif %}
+        {% if c.updated_at %}<br><span class="muted">由 {{ c.updated_by.name if c.updated_by else "?" }} 於 {{ fmt_dt(c.updated_at) }} 設定</span>{% endif %}</p>
+      {% if c.undecryptable %}<div class="alert bad">已存的 Webhook 無法解密（多半是 <span class="mono">AAMS_SECRET_KEY</span> 被更換過），目前不會傳送。請重新設定。</div>{% endif %}
+      <details>
+        <summary>更換或停用這個 Webhook</summary>
+        <div class="alert bad"><strong>⚠️ 這個頻道已經設定過。</strong>更換後，{{ c.use }}都會改發到新的頻道；停用後就不再發送。
+          系統會先在<strong>原本的頻道</strong>發一則「已被 {{ me.name }} 變更」的通知，並寫入稽核紀錄。</div>
+        <form method="post" action="/admin/system/discord-webhook" autocomplete="off"
+              data-confirm="確定要變更「{{ c.label }}」的 Discord Webhook？原本的頻道會收到變更通知。">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="channel" value="{{ c.ch }}">
+          <label>新的 Webhook 網址（停用時免填）</label>
+          <input type="password" name="url" placeholder="https://discord.com/api/webhooks/……" autocomplete="off" spellcheck="false">
+          <label>你的登入密碼（確認身分）</label>
+          <input type="password" name="password" required autocomplete="current-password">
+          <label class="check"><input type="checkbox" name="confirm" value="yes" required> 我了解更換／停用的影響</label>
+          <div class="actions">
+            <button class="danger" type="submit" name="action" value="set">更換 Webhook</button>
+            <button class="secondary" type="submit" name="action" value="clear" formnovalidate
+>停用這個頻道</button>
+          </div>
+        </form>
+      </details>
+    {% else %}
+      <p><span class="tag">未設定（不傳送）</span></p>
+      <form method="post" action="/admin/system/discord-webhook" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="channel" value="{{ c.ch }}">
+        <input type="hidden" name="action" value="set">
+        <label>Webhook 網址</label>
+        <input type="password" name="url" required placeholder="https://discord.com/api/webhooks/……" autocomplete="off" spellcheck="false">
+        <label>你的登入密碼（確認身分）</label>
+        <input type="password" name="password" required autocomplete="current-password">
+        <div class="actions"><button type="submit">儲存並送出測試訊息</button></div>
+      </form>
+    {% endif %}
+    {% if c.ok %}
+    <form class="inline" method="post" action="/admin/system/test-discord">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}"><input type="hidden" name="channel" value="{{ c.ch }}">
+      <button class="small secondary" type="submit">送出測試訊息</button></form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <table class="compact">
+    <tr><th>傳送統計</th><td>成功 {{ discord.status.sent }} · 失敗 {{ discord.status.failed }} · 佇列滿而丟棄 {{ discord.status.dropped }}
+      {% if discord.status.last_error %}<br><span class="muted">最後錯誤：{{ discord.status.last_error }}（{{ fmt_dt(discord.status.last_error_at) }}）</span>{% endif %}</td></tr>
+  </table>
+  <p><a class="btn small secondary" href="/staff/discord">Discord 設定：登記可 @ 的身分組、預覽截止提醒</a></p>
+  <p class="muted">訊息不包含分數或個資。取得 Webhook 網址的方法見專案根目錄 <span class="mono">discord_setting_readme.md</span>。</p>
+</div>
+
+<div class="card" id="reminder">
+  <h3>截止前提醒：系統預設</h3>
+  <p>目前：截止前 <strong>{{ reminder.label }}</strong>
+    {% if reminder.source == "env" %}<span class="tag">🔒 由伺服器 .env 設定</span>
+    {% elif reminder.source == "web" %}<span class="muted">（由 {{ reminder.updated_by.name if reminder.updated_by else "?" }} 於 {{ fmt_dt(reminder.updated_at) }} 設定）</span>
+    {% else %}<span class="muted">（內建值）</span>{% endif %}</p>
+  <p class="muted">套用到所有「使用系統預設」的作業；個別作業可在作業設定自訂或關閉。改完立即生效，不用重新啟動。</p>
+  {% if reminder.source == "env" %}
+    <p class="muted">要修改請編輯 <span class="mono">.env</span> 的 <span class="mono">AAMS_REMINDER_HOURS</span> 後重新啟動；或把那一行清空，改由這裡設定。</p>
+  {% else %}
+  <form method="post" action="/admin/system/reminder-hours" class="field-row"
+        data-confirm="變更後，所有「使用系統預設」的作業都會改用新的提醒時間（已發出的提醒不受影響）。確定？">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div><label>提醒時間（小時，逗號分隔，最多 5 個）</label><input type="text" name="hours" value="{{ reminder.raw }}" maxlength="40" placeholder="例如 2,1 或 3,1,0.5"></div>
+    <div><label>&nbsp;</label><button type="submit" name="action" value="set">儲存</button></div>
+    {% if reminder.source == "web" %}<div><label>&nbsp;</label><button class="secondary" type="submit" name="action" value="reset">恢復內建值 2,1</button></div>{% endif %}
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>部署設定</h3>
+  <table>
+    <tr><th>資料庫</th><td>{{ info.database }}</td></tr>
+    <tr><th>資料目錄</th><td class="mono">{{ info.data_dir }}</td></tr>
+    <tr><th>檔案檢查模式</th><td>{{ info.inspector_mode }}</td></tr>
+    <tr><th>Secure Cookie（HTTPS）</th><td>{{ "是" if info.cookie_secure else "否（僅限測試環境！）" }}</td></tr>
+    <tr><th>系統允許檔案類型</th><td>{{ info.system_types }}</td></tr>
+    <tr><th>營隊結束日</th><td>{{ info.event_end_at }}</td></tr>
+  </table>
+  <p class="muted">備份、還原與期末重置請使用伺服器上的 <span class="mono">python manage.py backup / reset-instance</span>（詳見部署手冊），不提供網頁一鍵刪除。</p>
+  {% if not info.cookie_secure %}<div class="alert warn">目前未啟用 HTTPS Secure Cookie。正式上線必須透過 HTTPS（Caddy）並設定 AAMS_COOKIE_SECURE=true。</div>{% endif %}
+</div>
+{% endblock %}

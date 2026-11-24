@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}公告{% endblock %}
+{% block content %}
+<h1 class="page-title">公告</h1>
+{% if can_post %}<div class="actions" style="margin-bottom:12px"><a class="btn" href="/announcements/new">＋ 發布公告</a></div>{% endif %}
+<div class="card">
+  {% for a in items %}
+  <div class="ann {% if a.pinned %}pinned{% endif %} {% if a.status != 'PUBLISHED' %}hidden-ann{% endif %}">
+    <h4>{{ a.title }}
+      {% if a.course_id %}<span class="tag info">{{ courses[a.course_id].title }}</span>{% else %}<span class="tag dark">全營</span>{% endif %}
+      {% if a.status != "PUBLISHED" %}<span class="tag warn">隱藏中</span>{% endif %}
+      {% if seen is none or a.created_at > seen %}<span class="tag late">新</span>{% endif %}
+    </h4>
+    <div class="muted">{{ fmt_dt(a.created_at, False) }}{% if a.updated_at and a.updated_at > a.created_at %}（{{ fmt_dt(a.updated_at, False) }} 更新）{% endif %}</div>
+    <div class="ann-body">{{ a.body }}</div>
+    {% if a.id in manageable %}
+    <div class="actions">
+      <a class="btn small secondary" href="/announcements/{{ a.id }}/edit">編輯</a>
+      <form class="inline" method="post" action="/announcements/{{ a.id }}/delete" data-confirm="確定刪除這則公告？">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="small danger" type="submit">刪除</button></form>
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">目前沒有公告。</p>
+  {% endfor %}
+</div>
+{% endblock %}

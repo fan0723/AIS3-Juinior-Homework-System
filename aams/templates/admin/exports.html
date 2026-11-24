@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}匯出{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 匯出</div>
+<h1 class="page-title">匯出</h1>
+<div class="alert info">所有匯出都會記錄操作人、範圍與時間。CSV 已做 Formula Injection 防護；一般匯出不含電話、密碼雜湊與內部備註。</div>
+<div class="grid cols-2">
+  <div class="card">
+    <h3>成績 CSV（單一作業）</h3>
+    <form method="post" action="/admin/exports/grades">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label>作業</label>
+      <select name="assignment_id">{% for a in assignments %}<option value="{{ a.id }}">{{ courses[a.course_id].title }} / {{ a.title }}</option>{% endfor %}</select>
+      <label>組別（不選 = 全部）</label>
+      <select name="group_ids" multiple>{% for g in groups %}<option value="{{ g.id }}">{{ g.label }}</option>{% endfor %}</select>
+      <p class="muted">包含內部目前分數與最後一次已發布分數；隱藏專題（HIDDEN）成績只在此管理員內部表出現。</p>
+      <div class="actions"><button type="submit">下載 CSV</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>繳交紀錄 CSV（全部作業）</h3>
+    <form method="post" action="/admin/exports/submissions">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <p class="muted">每個版本一列：提交者、時間、遲交、檢查狀態、檔名與 SHA-256。</p>
+      <div class="actions"><button type="submit">下載 CSV</button></div>
+    </form>
+    <h3>帳號清單 CSV</h3>
+    <form method="post" action="/admin/exports/users">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <label class="check"><input type="checkbox" name="include_phone" value="1"> 包含聯絡電話（個資，請確認用途）</label>
+      <div class="actions"><button type="submit">下載 CSV</button></div>
+    </form>
+  </div>
+  <div class="card">
+    <h3>批次下載附件（ZIP）</h3>
+    <p class="muted">依組別／學員勾選、每人一個資料夾、可強制統一命名，並附遲交說明與總表。</p>
+    <div class="actions"><a class="btn" href="/downloads">前往批次下載</a></div>
+  </div>
+</div>
+{% endblock %}

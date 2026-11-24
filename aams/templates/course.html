@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/">課程首頁</a> › {{ course.title }}</div>
+<h1 class="page-title">{{ course.title }}</h1>
+{% if manage %}<div class="actions" style="margin-bottom:12px"><a class="btn" href="/staff/courses/{{ course.id }}">管理此課程</a></div>{% endif %}
+{% if anns or manage %}
+<div class="card">
+  <h3>課程公告{% if manage %} <a class="btn small" href="/announcements/new?course_id={{ course.id }}">＋ 發布課程公告</a>{% endif %}</h3>
+  {% for a in anns %}
+  <div class="ann {% if a.pinned %}pinned{% endif %} {% if a.status != 'PUBLISHED' %}hidden-ann{% endif %}">
+    <h4>{{ a.title }}{% if a.status != "PUBLISHED" %} <span class="tag warn">隱藏中</span>{% endif %}</h4>
+    <div class="muted">{{ fmt_dt(a.created_at, False) }}</div>
+    <div class="ann-body">{{ a.body }}</div>
+  </div>
+  {% else %}<p class="muted">尚無課程公告。</p>{% endfor %}
+</div>
+{% endif %}
+<div class="card">
+  <h3>課程說明</h3>
+  <div style="white-space:pre-wrap">{{ course.description or "（尚無說明）" }}</div>
+</div>
+<div class="card">
+  <h3>投影片／教材</h3>
+  {% if materials %}
+  <table>
+    <tr><th>名稱</th><th>檔名</th><th>大小</th><th></th></tr>
+    {% for m in materials %}
+    <tr>
+      <td>{{ m.title }}{% if m.visibility != "PUBLISHED" %} <span class="tag warn">隱藏</span>{% endif %}</td>
+      <td class="mono">{{ m.original_filename }}</td>
+      <td>{{ fmt_bytes(m.size) }}</td>
+      <td><a href="/materials/{{ m.id }}/preview">線上預覽</a> · <a href="/materials/{{ m.id }}/download">下載</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">尚無教材。</p>{% endif %}
+</div>
+<div class="card">
+  <h3>作業</h3>
+  {% if rows %}
+  <table>
+    <tr><th>作業</th><th>類型</th><th>截止（台北）</th><th>遲交</th><th>我的狀態</th><th>成績</th><th>繳交率</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td><a href="/assignments/{{ r.a.id }}">{{ r.a.title }}</a>{% if r.a.status != "PUBLISHED" %} <span class="tag warn">草稿</span>{% endif %}</td>
+      <td>{% if r.a.submission_mode == "GROUP" %}<span class="tag info">團體</span>{% else %}<span class="tag">個人</span>{% endif %}</td>
+      <td>{{ fmt_dt(r.a.due_at, False) }}{% if r.past_due %} <span class="tag late">已截止</span>{% endif %}</td>
+      <td>{% if not r.a.accepting_submissions %}<span class="tag">收件關閉</span>{% elif r.a.allow_late %}允許{% else %}不允許{% endif %}</td>
+      <td>
+        {% if ctx.is_student %}
+          {% if r.latest %}<span class="tag ok">第 {{ r.latest.revision_no }} 版</span>{% if r.latest.is_late %} <span class="tag late">LATE</span>{% endif %}
+          {% else %}<span class="tag warn">未繳交</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      <td>{% if r.released %}<span class="tag ok">已發布</span>{% else %}<span class="tag">未發布</span>{% endif %}</td>
+      <td>{% if r.rate %}{{ r.rate[0] }} / {{ r.rate[1] }}{% else %}<span class="muted">截止後顯示</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">尚無作業。</p>{% endif %}
+</div>
+{% endblock %}

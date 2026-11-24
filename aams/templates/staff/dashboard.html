@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}工作台{% endblock %}
+{% block content %}
+<h1 class="page-title">工作台</h1>
+
+{% if ctx.is_admin or ctx.is_instructor %}
+<div class="card">
+  <h3>成績申覆 {% if appeal_open %}<span class="tag warn">{{ appeal_open }} 件待處理</span>{% else %}<span class="tag ok">沒有待處理</span>{% endif %}</h3>
+  <a class="btn small {% if not appeal_open %}secondary{% endif %}" href="/staff/appeals">前往處理</a>
+  <a class="btn small secondary" href="/announcements/new">發布公告</a>
+  <a class="btn small secondary" href="/staff/discord">Discord 設定（截止提醒、@身分組）</a>
+</div>
+{% endif %}
+
+{% if notes %}
+<div class="card">
+  <h3>新的提交版本 <a class="small" href="/notifications">（全部通知）</a></h3>
+  <ul>{% for n in notes %}<li><span class="tag late">新</span> {{ fmt_dt(n.created_at) }} — <a href="/staff/submissions/{{ n.submission_id }}">{{ n.message }}</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if tasks %}
+<div class="card">
+  <h3>我的批改任務</h3>
+  <table>
+    <tr><th>作業</th><th>組別</th><th>可批改題目</th><th>總分權限</th><th></th></tr>
+    {% for x in tasks %}
+    <tr>
+      <td>{{ x.a.title }}</td><td>{{ x.g.label }}</td>
+      <td>{% for q in x.qs %}<span class="tag">Q{{ q.ordinal }}</span> {% else %}—{% endfor %}</td>
+      <td>{% if x.t.can_grade_total %}<span class="tag ok">有</span>{% else %}—{% endif %}</td>
+      <td><a href="/staff/assignments/{{ x.a.id }}">前往批改</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if my_groups %}
+<div class="card">
+  <h3>我帶領的組別</h3>
+  <p class="muted">帶組助教可查看本組繳交狀態與檔案，但<strong>沒有批改任務時不能改分</strong>。</p>
+  {% for x in my_groups %}
+  <p><strong>{{ x.g.label }}（{{ x.g.code }}）</strong>：{% for m in x.members %}{{ m.name }}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+  {% endfor %}
+  {% if published %}
+  <h4>作業</h4>
+  <ul>{% for a in published %}<li><a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> <span class="muted">截止 {{ fmt_dt(a.due_at, False) }}</span></li>{% endfor %}</ul>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if course_rows %}
+<div class="card">
+  <h3>{% if ctx.is_admin %}所有課程{% else %}我負責的課程{% endif %}</h3>
+  {% for x in course_rows %}
+  <div style="margin-bottom:14px">
+    <strong><a href="/staff/courses/{{ x.c.id }}">{{ x.c.title }}</a></strong>
+    {% if x.c.status != "PUBLISHED" %}<span class="tag warn">未發布</span>{% endif %}
+    <a class="btn small" href="/staff/courses/{{ x.c.id }}/assignments/new">＋ 新增作業</a>
+    <table class="compact" style="margin-top:6px">
+      {% for a in x.assignments %}
+      <tr>
+        <td><a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> {% if a.status != "PUBLISHED" %}<span class="tag warn">草稿</span>{% endif %}</td>
+        <td>{{ fmt_dt(a.due_at, False) }}</td>
+        <td><a href="/staff/assignments/{{ a.id }}/edit">設定</a> · <a href="/staff/assignments/{{ a.id }}/questions">題目</a> ·
+            <a href="/staff/assignments/{{ a.id }}/tasks">批改任務</a> · <a href="/staff/assignments/{{ a.id }}/release">發布</a> ·
+            <a href="/staff/assignments/{{ a.id }}/stats">統計</a> · <a href="/staff/assignments/{{ a.id }}/similarity">相似度</a></td>
+      </tr>
+      {% else %}<tr><td class="muted">尚無作業</td></tr>{% endfor %}
+    </table>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

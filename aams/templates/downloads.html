@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}批次下載{% endblock %}
+{% block content %}
+<h1 class="page-title">批次下載</h1>
+<div class="card">
+  <form method="get" action="/downloads">
+    <label>1. 選擇作業</label>
+    <select name="assignment_id">
+      {% for a, c in assignments %}<option value="{{ a.id }}" {% if sel and sel.id == a.id %}selected{% endif %}>{{ c.title }} / {{ a.title }}</option>{% endfor %}
+    </select>
+    <div class="actions"><button class="small" type="submit">下一步</button></div>
+  </form>
+  {% if not assignments %}<p class="muted">目前沒有可以下載的作業。</p>{% endif %}
+</div>
+
+{% if sel %}
+<form class="card" method="post" action="/downloads/zip">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  <input type="hidden" name="assignment_id" value="{{ sel.id }}">
+  <h3>2. 勾選要下載的{{ "組別" if sel.submission_mode == "GROUP" else "學員" }}：{{ course.title }} / {{ sel.title }}</h3>
+  {% if units %}
+  <div class="actions"><button class="small secondary" data-check-all="1">全選</button><button class="small secondary" data-check-all="0">全不選</button></div>
+  <table class="compact">
+    <tr><th></th><th>{{ "組別" if sel.submission_mode == "GROUP" else "學員" }}</th><th>狀態</th></tr>
+    {% for u in units %}
+    <tr>
+      <td><input type="checkbox" name="units" value="{{ unit_key(u) }}" {% if units|length == 1 %}checked{% endif %}></td>
+      <td>{{ u.label }}</td>
+      <td>{% if not u.latest %}<span class="tag warn">未交</span>
+          {% else %}第 {{ u.latest.revision_no }} 版
+            {% if u.latest.is_late %}<span class="tag late">LATE</span>{% endif %}
+            {% if u.latest.scan_state == "REJECTED" %}<span class="tag bad">未通過檢查</span>{% elif u.latest.scan_state != "ACCEPTED" %}<span class="tag warn">檢查中</span>{% endif %}
+          {% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h3>3. 選項</h3>
+  <label class="check"><input type="radio" name="versions" value="latest" checked> 只要最新版（通過檢查的最新一版）</label>
+  <label class="check"><input type="radio" name="versions" value="all"> 保留中的所有版本（資料夾內依 v3/、v2_LATE/ 分開）</label>
+  <label class="check"><input type="checkbox" name="force_naming" value="1"> 強制統一命名：
+    <span class="mono">{% if sel.submission_mode == "GROUP" %}Group01{% else %}Group01_姓名{% endif %}_{{ course.file_name }}_{{ sel.file_name }}[_LATE].副檔名</span></label>
+  {% if not course.name_en or not sel.name_en %}<div class="help">課程或作業還沒設定英文名稱，檔名會用 {{ course.file_name }}_{{ sel.file_name }} 代替（可在課程／作業設定裡填寫）。</div>{% endif %}
+  <p class="muted">壓縮檔內每位{{ "組別" if sel.submission_mode == "GROUP" else "學員" }}一個資料夾；遲交的資料夾名稱加上 <span class="mono">_LATE</span>，有狀況（遲交多久、檔案未通過檢查等）時資料夾內會附 <span class="mono">README.txt</span>。
+    最外層有 <span class="mono">_SUMMARY.txt</span>（誰交了／沒交／遲交）與 <span class="mono">MANIFEST.csv</span>（SHA-256）。只會包含通過安全檢查的檔案。</p>
+  <div class="actions"><button type="submit">下載 ZIP</button></div>
+  {% else %}
+  <p class="muted">這份作業沒有你可以下載的提交。</p>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}學員進度{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › 學員進度</div>
+<h1 class="page-title">學員跨課程進度</h1>
+<div class="card" style="overflow-x:auto">
+  <p class="muted">✓ 準時 · L 遲交 · ? 檔案尚未通過檢查 · 空白 未繳交（以最新版本為準）</p>
+  <table class="matrix">
+    <tr><th>學員</th><th>組</th>{% for a in assignments %}<th title="{{ a.title }}">{{ a.title[:8] }}</th>{% endfor %}</tr>
+    {% for s in students %}
+    <tr><td style="text-align:left">{{ s.name }}</td><td>{{ groups[s.id].code if groups[s.id] else "" }}</td>
+      {% for a in assignments %}{% set st = status.get((s.id, a.id)) %}
+      <td>{% if st %}{% if st.startswith("LATE") %}<span class="tag late">L{{ "?" if "?" in st else "" }}</span>{% else %}<span class="tag ok">✓{{ "?" if "?" in st else "" }}</span>{% endif %}{% endif %}</td>
+      {% endfor %}</tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

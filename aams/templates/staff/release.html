@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}統一發布成績{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> › 發布</div>
+<h1 class="page-title">統一發布成績：{{ a.title }}</h1>
+<div class="card">
+  <p>發布會針對整份作業建立不可變的發布快照（版本號、每人最終分數、各題分數、評語）。發布後再改分或收到補交，都不會自動改變已發布資料，需要再次發布。</p>
+  <p>學員端顯示：{% if a.student_grade_visibility == "HIDDEN" %}<span class="tag warn">不對學員顯示（HIDDEN）</span>{% else %}<span class="tag ok">發布後顯示</span>{% endif %}</p>
+  {% if blockers %}
+    <div class="alert bad"><strong>有 {{ blockers|length }} 個阻擋項目，無法發布：</strong>
+      <ul>{% for u, b in blockers %}<li>{{ u.label }}：{{ b }}{% if u.submission %} — <a href="/staff/submissions/{{ u.submission.id }}">前往</a>{% endif %}</li>{% endfor %}</ul>
+    </div>
+  {% else %}
+    <div class="alert ok">沒有阻擋項目。</div>
+  {% endif %}
+  {% if no_sub %}<p class="muted">未繳交（不會產生成績）：{% for u in no_sub %}{{ u.label }}{% if not loop.last %}、{% endif %}{% endfor %}</p>{% endif %}
+  <h3>將發布的內容</h3>
+  <table class="compact">
+    <tr><th>單位</th><th>版本</th><th>準時</th><th>最終分</th></tr>
+    {% for u in units if u.target %}
+    <tr><td>{{ u.label }}</td><td>第 {{ u.target.revision_no }} 版</td><td>{{ "LATE" if u.target.is_late else "ON_TIME" }}</td>
+      <td>{{ fmt_score(u.scores.final) if u.scores else "—" }}</td></tr>
+    {% endfor %}
+  </table>
+  {% if not blockers %}
+  <form method="post" action="/staff/assignments/{{ a.id }}/release" data-confirm="確定要統一發布這份作業的成績？">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <label>{% if batches %}重新發布原因（必填）{% else %}備註（可選）{% endif %}</label>
+    <input type="text" name="reason" maxlength="500" {% if batches %}required{% endif %}>
+    <label class="check"><input type="checkbox" name="confirm" value="1" required> 我已確認所有欲發布對象皆已完成評分</label>
+    <div class="actions"><button type="submit">{{ "重新發布（republish）" if batches else "統一發布" }}</button></div>
+  </form>
+  {% endif %}
+</div>
+<div class="card">
+  <h3>發布紀錄</h3>
+  <table>
+    <tr><th>#</th><th>時間</th><th>操作者</th><th>原因</th></tr>
+    {% for b in batches %}<tr><td>{{ b.release_no }}</td><td>{{ fmt_dt(b.created_at) }}</td><td>{{ batch_actors[b.id].name }}</td><td>{{ b.reason }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">尚未發布</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

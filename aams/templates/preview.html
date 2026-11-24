@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}預覽 {{ fname }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="actions" style="margin-top:0">
+    <strong>{{ fname }}</strong>
+    <a class="btn small secondary" href="{{ download }}">下載</a>
+  </div>
+  <p class="muted">檔案在獨立的預覽來源（不同 port／網域）中顯示，與主站 Session 隔離；預覽連結 5 分鐘內有效。</p>
+  {% if ftype == "pdf" %}
+    <iframe class="preview-frame" src="{{ src }}" title="preview" referrerpolicy="no-referrer"></iframe>
+  {% else %}
+    <iframe class="preview-frame" src="{{ src }}" title="preview" sandbox referrerpolicy="no-referrer"></iframe>
+  {% endif %}
+</div>
+{% endblock %}

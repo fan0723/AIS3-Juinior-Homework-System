@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}CSV 匯入{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/admin">管理後台</a> › CSV 匯入</div>
+<h1 class="page-title">CSV 批次匯入（僅新增）</h1>
+<div class="alert warn">課程進行中請盡量逐筆新增帳號，避免重新批次匯入。匯入<strong>不會更新</strong>已存在使用者的密碼、角色、組別或個資。含明文初始密碼的 CSV 請勿存放於共用硬碟、版控或寄信，匯入後立即刪除。</div>
+<div class="card">
+  <p>欄位（順序必須相同，UTF-8）：</p>
+  <pre class="mono">email,name,role,school,grade,group_code,initial_password,phone
+student@example.org,Example Student,STUDENT,Example High School,10,G01,10007038907,0912xxxxxx</pre>
+  <p class="muted">role：STUDENT／TA／INSTRUCTOR／ADMIN。STUDENT 的 group_code 為所屬組；TA 的 group_code 為帶領組別（可空白）。請先在「分組」建立 G01–G12。</p>
+  <form method="post" action="/admin/import" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="file" name="file" accept=".csv" required>
+    <div class="actions"><button type="submit">上傳並預覽</button></div>
+  </form>
+</div>
+{% if preview %}
+<div class="card">
+  <h3>預覽結果</h3>
+  <p>總筆數 <strong>{{ preview.summary.total }}</strong> · 將新增 <span class="tag ok">{{ preview.summary.new }}</span> · 重複略過 <span class="tag warn">{{ preview.summary.dup }}</span> · 錯誤 <span class="tag bad">{{ preview.summary.err }}</span></p>
+  {% if preview.summary.err == 0 and preview.summary.new > 0 %}
+  <form method="post" action="/admin/import/commit" data-confirm="確定新增 {{ preview.summary.new }} 個帳號？">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <input type="hidden" name="token" value="{{ preview.token }}">
+    <button type="submit">確認匯入 {{ preview.summary.new }} 筆</button>
+    <span class="muted">預覽 10 分鐘內有效，只能確認一次。</span>
+  </form>
+  {% elif preview.summary.err %}
+  <div class="alert bad">請修正錯誤後重新上傳。</div>
+  {% endif %}
+  <table class="compact" style="margin-top:10px">
+    <tr><th>行</th><th>狀態</th><th>Email</th><th>姓名</th><th>角色</th><th>學校</th><th>年級</th><th>組別</th><th>電話</th><th>問題</th></tr>
+    {% for r in preview.rows %}
+    <tr>
+      <td>{{ r.line }}</td>
+      <td>{% if r.status == "NEW" %}<span class="tag ok">新增</span>{% elif r.status == "DUPLICATE" %}<span class="tag warn">已存在</span>{% else %}<span class="tag bad">錯誤</span>{% endif %}</td>
+      <td>{{ r.email }}</td><td>{{ r.name }}</td><td>{{ r.role }}</td><td>{{ r.school }}</td><td>{{ r.grade }}</td><td>{{ r.group_code }}</td><td>{{ r.phone }}</td>
+      <td>{{ r.problems|join("；") }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

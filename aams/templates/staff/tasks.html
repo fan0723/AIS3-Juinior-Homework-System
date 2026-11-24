@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}批改任務{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> › 批改任務</div>
+<h1 class="page-title">批改任務：{{ a.title }}</h1>
+<div class="alert info">任何助教（包含帶組助教）都必須有有效批改任務才能改分；任務以「作業 × 組別 × 題目集合」指派，撤銷後立即失效。</div>
+<div class="card">
+  <h3>新增任務</h3>
+  <form method="post" action="/staff/assignments/{{ a.id }}/tasks">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="field-row">
+      <div>
+        <label>批改助教</label>
+        <select name="grader_id" required>
+          {% for t in tas %}<option value="{{ t.id }}">{{ t.name }}（{{ t.email }}）</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>組別（可多選，Ctrl/Shift）</label>
+        <select name="group_ids" multiple required>
+          {% for g in groups %}<option value="{{ g.id }}">{{ g.label }}（{{ g.code }}）</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>可批改題目（可多選）</label>
+        <select name="question_ids" multiple>
+          {% for q in qs %}<option value="{{ q.id }}">Q{{ q.ordinal }} {{ q.title }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" name="can_grade_total" value="1"> 允許直接設定總分／最終分（預設不授予）</label>
+    <div class="actions"><button type="submit">建立任務</button></div>
+  </form>
+</div>
+<div class="card">
+  <h3>任務列表</h3>
+  <table>
+    <tr><th>助教</th><th>組別</th><th>題目</th><th>總分權</th><th>建立時間</th><th>狀態</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.grader.name }}</td><td>{{ r.g.label }}</td>
+      <td>{% for q in r.qs %}<span class="tag">Q{{ q.ordinal }}</span> {% else %}—{% endfor %}</td>
+      <td>{{ "有" if r.t.can_grade_total else "—" }}</td>
+      <td>{{ fmt_dt(r.t.created_at) }}</td>
+      <td>{% if r.t.revoked_at %}<span class="tag">已撤銷 {{ fmt_dt(r.t.revoked_at) }}</span>{% else %}<span class="tag ok">有效</span>{% endif %}</td>
+      <td>{% if not r.t.revoked_at %}<form class="inline" method="post" action="/staff/tasks/{{ r.t.id }}/revoke" data-confirm="確定撤銷此任務？">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="small danger" type="submit">撤銷</button></form>{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="7" class="muted">尚無任務</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

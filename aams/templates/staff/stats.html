@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}統計{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/staff">工作台</a> › <a href="/staff/assignments/{{ a.id }}">{{ a.title }}</a> › 統計</div>
+<h1 class="page-title">統計：{{ a.title }}</h1>
+<div class="grid cols-4">
+  <div class="card"><div class="muted">應繳單位</div><div class="kpi">{{ units|length }}</div></div>
+  <div class="card"><div class="muted">已繳交</div><div class="kpi">{{ submitted }}</div></div>
+  <div class="card"><div class="muted">準時／遲交（最新版）</div><div class="kpi">{{ on_time }} / {{ late }}</div></div>
+  <div class="card"><div class="muted">已完成評分</div><div class="kpi">{{ finals|length }}</div></div>
+</div>
+<div class="grid cols-2">
+  <div class="card">
+    <h3>各題得分率（含 0 分；工作人員用）</h3>
+    <table class="compact">
+      <tr><th>題目</th><th>樣本</th><th>平均</th><th>得分率</th><th>0 分人數</th></tr>
+      {% for s in q_stats %}
+      <tr><td>Q{{ s.q.ordinal }} {{ s.q.title }}</td><td>{{ s.n }}</td><td>{{ fmt_score(s.avg) }}</td>
+        <td>{% if s.rate is not none %}{{ "%.1f"|format(s.rate) }}%{% else %}—{% endif %}</td><td>{{ s.zeros }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h3>總分分布（滿分 {{ fmt_score(max_total) }}）</h3>
+    {% set mx = (buckets|map(attribute=1)|max) or 1 %}
+    <table class="compact">
+      {% for b, n in buckets %}
+      <tr><td style="width:80px">{{ b }}{% if b < 100 %}–{{ b + 9 }}{% endif %}%</td><td><div class="bar" style="width:{{ (n / mx * 100)|round }}%"></div></td><td style="width:40px">{{ n }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="card">
+    <h3>重交次數</h3>
+    <table class="compact"><tr><th>最新版本號</th><th>單位數</th></tr>
+      {% for n, c in rev_counts %}<tr><td>第 {{ n }} 版</td><td>{{ c }}</td></tr>{% endfor %}</table>
+  </div>
+  <div class="card">
+    <h3>批改負擔（已評題數）</h3>
+    <table class="compact"><tr><th>批改者</th><th>題數</th></tr>
+      {% for u, n in grader_rows %}<tr><td>{{ u.name }}</td><td>{{ n }}</td></tr>{% else %}<tr><td colspan="2" class="muted">尚無</td></tr>{% endfor %}</table>
+  </div>
+</div>
+{% endblock %}
