@@ -198,7 +198,9 @@ if __name__ == "__main__":
     elif len(sys.argv) == 3 and sys.argv[1] == "--text":
         sys.stdout.buffer.write(json.dumps(extract_text(sys.argv[2]), ensure_ascii=True).encode("ascii") + b"\n")
     elif len(sys.argv) == 3:
-        print(json.dumps(inspect_path(sys.argv[1], sys.argv[2]), ensure_ascii=False))
+        # stdout is a machine-readable protocol; ASCII escapes avoid Windows
+        # runner code pages that cannot encode the Chinese detail message.
+        sys.stdout.buffer.write(json.dumps(inspect_path(sys.argv[1], sys.argv[2]), ensure_ascii=True).encode("ascii") + b"\n")
     else:
         print(json.dumps({"ok": False, "type": "", "detail": "usage"}))
         sys.exit(2)

@@ -1,7 +1,11 @@
 """對應規格 §9.3 必要安全測試與 §12 驗收條件。"""
 import io
 import re
+import subprocess
+import sys
+import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 import pyotp
 import pytest
@@ -28,6 +32,22 @@ def make_pdf(extra: bytes = b"", pad: int = 0) -> bytes:
         head, rest = data.split(b"\n", 1)
         data = head + b"\n%" + b"A" * pad + b"\n" + extra + rest
     return data
+
+
+def test_inspector_output_works_with_non_chinese_console_encoding():
+    with tempfile.TemporaryDirectory(prefix="aams-inspector-test-") as directory:
+        pdf_path = Path(directory) / "sample.pdf"
+        pdf_path.write_bytes(make_pdf())
+        inspector_path = Path(__file__).resolve().parent.parent / "aams" / "inspector.py"
+        runner = (
+            "import io, runpy, sys; "
+            "sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='cp1252', errors='strict'); "
+            f"sys.argv = ['inspector.py', {str(pdf_path)!r}, 'pdf']; "
+            f"runpy.run_path({str(inspector_path)!r}, run_name='__main__')"
+        )
+        result = subprocess.run([sys.executable, "-I", "-c", runner], capture_output=True, check=False)
+        assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+        assert b'"ok": true' in result.stdout
 
 
 def assignment(title):
