@@ -53,6 +53,7 @@ cp /path/to/logo.png aams/static/local/logo.png
 | [docs/BUILD_AND_USAGE.md](docs/BUILD_AND_USAGE.md) | 安裝、建置、啟動、各角色操作流程、管理指令、正式部署（Docker + PostgreSQL + Caddy HTTPS + WireGuard） |
 | [docs/LAN_TESTING.md](docs/LAN_TESTING.md) | **不連外網**的內網測試：單機、同網段多台電腦、測試劇本與驗收清單 |
 | [discord_setting_readme.md](discord_setting_readme.md) | Discord 頻道通知：會發哪些訊息、建立 Webhook、填入設定、測試與疑難排解 |
+| [docker-test/docker_run_readme.md](docker-test/docker_run_readme.md) | **Docker 測試環境**（紅隊內測與部署驗證）：啟動、資料放哪裡與怎麼掛載、備份、重置、驗證清單 |
 
 ## 快速開始（Windows、macOS、Linux）
 
@@ -81,6 +82,24 @@ python3 -m venv .venv
 兩種環境都在專案根目錄執行。`.env`、`data/` 和 `.venv/` 是本機產生的內容，不會隨 Git clone 提供；首次啟動需要在新機器執行 `manage.py init`。完整步驟見 [建置與使用說明](docs/BUILD_AND_USAGE.md)。
 
 瀏覽器開啟 <http://127.0.0.1:8000>，以 `s011@demo.ais3.local` / `Ais3-Demo-2026` 登入（測試帳號，**正式上線前必須刪除**，詳見下一節）。
+
+## 🐳 用 Docker 測試（v1.0.0-rc.2）
+
+最新的測試版本是 **`v1.0.0-rc.2`**，Docker 部署已在 Windows + Docker Desktop 上實際驗證（PostgreSQL + Caddy HTTPS + 隔離的檔案檢查容器，端到端測試 13/13 通過）。設定和正式環境使用同一份 `docker-compose.yml`，紅隊內測與部署驗證請用這個方式。
+
+```powershell
+git checkout v1.0.0-rc.2
+Copy-Item docker-test\env.example docker-test\.env    # 填入 AAMS_SECRET_KEY 與 POSTGRES_PASSWORD
+function dc { docker compose -p aams-test --env-file docker-test/.env -f docker-compose.yml @args }
+dc up -d --build
+dc exec app python manage.py seed-demo --active
+```
+
+瀏覽器開啟 <https://localhost>（Caddy 內部憑證，第一次要接受警告；`https://localhost:8443` 也要接受一次，PDF 預覽才會顯示）。
+
+資料放在哪裡、怎麼掛載、備份、每輪測試後如何重置、驗證清單，請看 **[docker-test/docker_run_readme.md](docker-test/docker_run_readme.md)**。
+
+> 目前 image 需要在本機用 `dc up -d --build` 建置；預先建好的 image 尚未發布到 GitHub Container Registry。
 
 ---
 
