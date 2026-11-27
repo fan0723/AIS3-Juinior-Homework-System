@@ -216,7 +216,9 @@ def user_reset_password(user_id: int, request: Request, verification_note: str =
         raise HTTPException(400, "請填寫核身紀錄（例如：已於服務台核對學生證）")
     temp = secrets.token_urlsafe(9)
     u.password_hash = hash_password(temp)
-    u.status = "PENDING_PASSWORD_CHANGE"
+    u.activated_at = None  # 臨時密碼要先改掉才算啟用；之後重新啟用帳號也會先要求改密碼
+    if u.status != "DISABLED":  # 停用中的帳號維持停用，不因重設密碼而復活
+        u.status = "PENDING_PASSWORD_CHANGE"
     u.credential_version += 1
     revoke_user_sessions(ctx.db, u.id)
     audit(ctx.db, ctx.user.id, "user.reset_password", "user", u.id, {"verification": note}, ctx.ip)

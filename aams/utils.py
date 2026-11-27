@@ -116,7 +116,10 @@ def parse_score(value: str | None) -> Decimal | None:
         raise ValueError("分數格式錯誤") from exc
     if not d.is_finite():
         raise ValueError("分數格式錯誤")
-    return d.quantize(TWO, rounding=ROUND_HALF_UP)
+    try:
+        return d.quantize(TWO, rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:  # 位數太多，例如 1e30
+        raise ValueError("分數格式錯誤") from exc
 
 
 def fmt_score(d: Decimal | None) -> str:

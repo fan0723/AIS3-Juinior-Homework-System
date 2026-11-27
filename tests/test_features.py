@@ -761,3 +761,129 @@ def test_announcement_role_mention(browser, admin, sent):
     assert sent.roles[-1] == ["112233445566778899"]
     assert admin.post("/announcements/new", {"course_id": "global", "title": "無提及", "body": "x"}).status_code == 303
     assert sent.roles[-1] is None
+
+
+# ---------------------------------------------------------------- audit fixes
+def _fake_ctx(db, email):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(db=db, user=db.scalar(select(User).where(User.canonical_email == email)), ip="")
+
+
+def test_group_release_goes_to_members_at_submission():
+    """換組後才發布：成績給提交當下的組員（GroupSnapshot），不是現在的組員。"""
+    from aams import acl, services
+    from aams.models import Group, GroupMembership, GroupSnapshot, ReleasedGrade
+
+    aid = _mk_assignment("Snapshot Lab", utcnow() - timedelta(hours=1), submission_mode="GROUP")
+    with SessionLocal() as db:
+        a = db.get(Assignment, aid)
+        g1, g2 = db.scalars(select(Group).order_by(Group.ordinal).limit(2)).all()
+        members = acl.group_member_ids(db, g1.id)
+        mover = members[0]
+        q = Question(assignment_id=a.id, ordinal=1, title="Q", max_points=Decimal(10))
+        sub = Submission(assignment_id=a.id, owner_type="GROUP", group_id=g1.id)
+        db.add_all([q, sub])
+        db.flush()
+        rev = Revision(submission_id=sub.id, revision_no=1, uploader_id=mover, finalized_at=utcnow(),
+                       due_version=a.due_version, due_at_snapshot=a.due_at, is_late=False, scan_state="ACCEPTED",
+                       manifest_hash="x", total_bytes=1, idempotency_key="snap")
+        db.add(rev)
+        db.flush()
+        sub.active_revision_id = rev.id
+        db.add_all([GroupSnapshot(revision_id=rev.id, student_id=s) for s in members])
+        db.add(GradeItem(revision_id=rev.id, question_id=q.id, score=Decimal(7), row_version=1))
+        for m in db.scalars(select(GroupMembership).where(GroupMembership.student_id == mover,
+                                                         GroupMembership.ended_at.is_(None))):
+            m.ended_at = utcnow()
+        db.add(GroupMembership(group_id=g2.id, student_id=mover))
+        db.flush()
+        try:
+            batch = services.publish(_fake_ctx(db, "staff3@demo.ais3.local"), a, "")
+            got = set(db.scalars(select(ReleasedGrade.student_id).where(ReleasedGrade.batch_id == batch.id)))
+            assert got == set(members)  # mover 仍拿到 G01 的成績；G02 的人沒有
+            db.commit()
+        finally:  # 把 mover 換回 G01，不影響其他測試
+            for m in db.scalars(select(GroupMembership).where(GroupMembership.student_id == mover,
+                                                             GroupMembership.ended_at.is_(None))):
+                m.ended_at = utcnow()
+            db.add(GroupMembership(group_id=g1.id, student_id=mover))
+            db.commit()
+
+
+def test_purge_keeps_accepted_version_and_defers_file_delete():
+    from aams import services
+    from aams.storage import ACCEPTED, QUARANTINE
+
+    aid = _mk_assignment("Purge Lab", utcnow() + timedelta(days=1))
+    with SessionLocal() as db:
+        ctx = _fake_ctx(db, "s011@demo.ais3.local")
+        a = db.get(Assignment, aid)
+
+        def finalize(n):
+            key = f"purge-{aid}-{n}"
+            (QUARANTINE / key).write_bytes(b"x")
+            return services.finalize_revision(ctx, a, [services.StagedFile(key, "a.pdf", 1, "0" * 64, "pdf")], key)
+
+        r1, _ = finalize(1)
+        r1.scan_state = "ACCEPTED"
+        db.commit()
+        revs = [r1]
+        for n in range(2, 7):
+            rev, paths = finalize(n)
+            db.commit()
+            for p in paths:
+                p.unlink(missing_ok=True)
+            revs.append(rev)
+        # 第 7 版：r1 是唯一通過檢查的版本 → 保留；r2 被淘汰，但檔案要等 commit 後才刪
+        rev7, paths = finalize(7)
+        r2_file = QUARANTINE / f"purge-{aid}-2"
+        assert revs[0].purged_at is None and revs[1].purged_at is not None
+        assert r2_file in paths and r2_file.exists() and ACCEPTED / f"purge-{aid}-2" in paths
+        db.rollback()  # 交易失敗 → r2 沒被淘汰，檔案也還在
+        assert db.get(Revision, revs[1].id).purged_at is None and r2_file.exists()
+
+
+def test_reset_password_keeps_disabled_account_disabled(admin):
+    from aams.models import UserRole
+    from aams.security import hash_password
+
+    with SessionLocal() as db:
+        u = User(email="gone@demo.ais3.local", canonical_email="gone@demo.ais3.local", name="Gone",
+                 password_hash=hash_password("x" * 12), status="DISABLED", activated_at=utcnow())
+        u.roles.append(UserRole(role="TA"))
+        db.add(u)
+        db.commit()
+        user_id = u.id
+    admin.get(f"/admin/users/{user_id}")
+    assert admin.post(f"/admin/users/{user_id}/reset-password", {"verification_note": "核對證件"}).status_code == 200
+    with SessionLocal() as db:
+        u = db.get(User, user_id)
+        assert u.status == "DISABLED" and u.activated_at is None
+    admin.get(f"/admin/users/{user_id}")
+    assert admin.post(f"/admin/users/{user_id}/status", {"action": "enable"}).status_code == 303
+    with SessionLocal() as db:
+        assert db.get(User, user_id).status == "PENDING_PASSWORD_CHANGE"  # 臨時密碼必須先改掉
+
+
+def test_parse_score_rejects_huge_numbers():
+    from aams.utils import parse_score
+
+    with pytest.raises(ValueError):
+        parse_score("1e30")
+    assert parse_score("7.555") == Decimal("7.56")
+
+
+def test_interrupted_similarity_runs_marked_failed():
+    from aams import similarity
+
+    aid = _mk_assignment("Sim Restart Lab", utcnow() + timedelta(days=1))
+    with SessionLocal() as db:
+        ins = db.scalar(select(User).where(User.canonical_email == "instructor2@demo.ais3.local"))
+        sr = SimilarityRun(assignment_id=aid, created_by=ins.id, status="RUNNING")
+        db.add(sr)
+        db.commit()
+        run_id = sr.id
+    similarity.fail_interrupted_runs()
+    with SessionLocal() as db:
+        assert db.get(SimilarityRun, run_id).status == "FAILED"

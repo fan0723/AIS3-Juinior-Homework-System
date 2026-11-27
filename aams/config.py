@@ -53,7 +53,7 @@ class Settings:
         self.retained_versions: int = 5
         # 反向代理之外，應用層對單一上傳 request 的硬上限（上限額度 + multipart overhead）
         self.max_upload_request_bytes: int = self.max_total_bytes_cap + 2_000_000
-        self.max_material_bytes: int = _int("AAMS_MAX_MATERIAL_BYTES", 100_000_000)
+        self.max_material_bytes: int = _int("AAMS_MAX_MATERIAL_BYTES", 40_000_000)  # 需小於 Caddy max_size 45MB
         self.max_csv_bytes: int = 2_000_000
         self.max_csv_rows: int = 2000
 

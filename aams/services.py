@@ -78,8 +78,11 @@ class StagedFile:
     declared: str
 
 
-def finalize_revision(ctx: Ctx, a: Assignment, staged: list[StagedFile], idem_key: str) -> Revision:
-    """在單一交易內重新檢查所有規則並建立 revision（SEC-022）。"""
+def finalize_revision(ctx: Ctx, a: Assignment, staged: list[StagedFile], idem_key: str) -> tuple[Revision, list]:
+    """在單一交易內重新檢查所有規則並建立 revision（SEC-022）。
+
+    回傳 (revision, 要刪除的舊版檔案路徑)；呼叫端必須在 commit 成功後才刪檔。
+    """
     db = ctx.db
     a = db.get(Assignment, a.id)  # reload latest settings
     now = utcnow()
@@ -99,7 +102,7 @@ def finalize_revision(ctx: Ctx, a: Assignment, staged: list[StagedFile], idem_ke
     sub = get_or_create_submission(db, a, ctx)
     existing = db.scalar(select(Revision).where(Revision.submission_id == sub.id, Revision.idempotency_key == idem_key))
     if existing is not None:
-        return existing  # idempotent replay
+        return existing, []  # idempotent replay
 
     manifest = hashlib.sha256(
         json.dumps(sorted([(s.filename, s.sha256, s.size) for s in staged])).encode()
@@ -122,7 +125,7 @@ def finalize_revision(ctx: Ctx, a: Assignment, staged: list[StagedFile], idem_ke
                 select(Revision).where(Revision.submission_id == sub.id, Revision.idempotency_key == idem_key)
             )
             if existing is not None:
-                return existing
+                return existing, []
     else:
         raise HTTPException(409, "同時提交衝突，請重試")
 
@@ -159,16 +162,25 @@ def finalize_revision(ctx: Ctx, a: Assignment, staged: list[StagedFile], idem_ke
           {"assignment": a.id, "revision_no": rev.revision_no, "late": is_late, "bytes": total}, ctx.ip)
     db.flush()
 
-    # 只保留最近 N 個實體版本
-    old = list(
-        db.scalars(
-            select(Revision).where(Revision.submission_id == sub.id, Revision.purged_at.is_(None))
-            .order_by(Revision.revision_no.desc()).offset(settings.retained_versions)
-        )
+    # 只保留最近 N 個實體版本；但最新一個通過檢查的版本、最新一次發布的版本一律保留（評分與申覆的依據）
+    keep = set(db.scalars(
+        select(Revision.id).where(Revision.submission_id == sub.id, Revision.scan_state == "ACCEPTED",
+                                  Revision.purged_at.is_(None))
+        .order_by(Revision.revision_no.desc()).limit(1)
+    ))
+    batch = latest_batch(db, a.id)
+    if batch is not None:
+        keep |= set(db.scalars(select(ReleasedGrade.revision_id).where(
+            ReleasedGrade.batch_id == batch.id, ReleasedGrade.submission_id == sub.id)))
+    old = db.scalars(
+        select(Revision).where(Revision.submission_id == sub.id, Revision.purged_at.is_(None))
+        .order_by(Revision.revision_no.desc()).offset(settings.retained_versions)
     )
+    paths = []
     for r in old:
-        purge_revision_files(db, r)
-    return rev
+        if r.id not in keep:
+            paths += purge_revision_files(db, r)
+    return rev, paths
 
 
 def owner_label(db: Session, sub: Submission) -> str:
@@ -202,8 +214,6 @@ def compute_scores(db: Session, a: Assignment, rev_id: int, questions: list[Ques
     scores = [sv.items[q.id].score if q.id in sv.items else None for q in questions]
     if questions and all(s is not None for s in scores):
         sv.question_total = sum(scores, Decimal("0"))
-    elif questions and any(s is not None for s in scores):
-        sv.question_total = None
     if a.grading_mode == "DIRECT_TOTAL":
         sv.base = sv.total.direct_total if sv.total else None
     else:
@@ -345,7 +355,11 @@ def publish(ctx: Ctx, a: Assignment, reason: str) -> ReleaseBatch:
         overrides = {
             o.student_id: o for o in db.scalars(select(GroupMemberOverride).where(GroupMemberOverride.revision_id == u.target.id))
         }
-        for m in u.members:
+        members = u.members
+        if a.submission_mode == "GROUP":  # 發給提交當下的組員：之後換組不影響已交作業的成績
+            at_submit = db.scalars(select(GroupSnapshot.student_id).where(GroupSnapshot.revision_id == u.target.id))
+            members = [db.get(User, sid) for sid in at_submit] or u.members
+        for m in members:
             score = sv.final
             if m.id in overrides and overrides[m.id].manual_final_score is not None:
                 score = overrides[m.id].manual_final_score
@@ -393,9 +407,9 @@ def public_stats(db: Session, a: Assignment) -> dict | None:
         snap = json.loads(r.snapshot_json)
         for q in snap["questions"]:
             titles[q["ordinal"]] = q["title"] or f"第 {q['ordinal']} 題"
+            vals = per_q.setdefault(q["ordinal"], [])  # 全是 0 分的題目也要列出（平均顯示為隱藏）
             if q["score"] is not None and Decimal(q["score"]) != 0:
-                per_q.setdefault(q["ordinal"], []).append(Decimal(q["score"]))
-            per_q.setdefault(q["ordinal"], per_q.get(q["ordinal"], []))
+                vals.append(Decimal(q["score"]))
         if snap["final"] is not None and Decimal(snap["final"]) != 0:
             finals.append(Decimal(snap["final"]))
 

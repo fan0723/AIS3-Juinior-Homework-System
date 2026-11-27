@@ -195,6 +195,17 @@ def run(run_id: int, template_path: Path | None = None) -> None:
                 _running.discard(sr.assignment_id)
 
 
+def fail_interrupted_runs() -> None:
+    """啟動時把上次被中斷（重開機）的比對標為失敗，否則畫面會一直顯示執行中。"""
+    with _lock:
+        busy = set(_running)
+    with SessionLocal() as db:
+        for sr in db.scalars(select(SimilarityRun).where(SimilarityRun.status.in_(("PENDING", "RUNNING")))):
+            if sr.assignment_id not in busy:
+                sr.status, sr.detail, sr.finished_at = "FAILED", "伺服器重新啟動，比對中斷，請重新執行", utcnow()
+        db.commit()
+
+
 def start(run_id: int, assignment_id: int, template_path: Path | None) -> bool:
     with _lock:
         if assignment_id in _running:

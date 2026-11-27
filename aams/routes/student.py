@@ -191,13 +191,15 @@ def submit(assignment_id: int, request: Request, files: list[UploadFile] = File(
 
             if not quick_magic_ok(head, declared):
                 raise HTTPException(400, f"檔案內容與副檔名不符：{sanitize_filename(f.filename)}")
-        rev = services.finalize_revision(ctx, a, staged, idempotency_key)
+        rev, purged = services.finalize_revision(ctx, a, staged, idempotency_key)
         db.commit()
     except BaseException:
         db.rollback()
         for s in staged:
             (QUARANTINE / s.key).unlink(missing_ok=True)
         raise
+    for p in purged:  # commit 成功後才刪舊版檔案
+        p.unlink(missing_ok=True)
     return RedirectResponse(f"/revisions/{rev.id}/receipt?msg=submitted", 303)
 
 

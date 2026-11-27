@@ -16,6 +16,7 @@ from .. import acl, services
 from ..config import settings
 from ..deps import Ctx, audit, get_ctx, render, require_csrf
 from ..models import Assignment, Course
+from ..utils import TAIPEI
 from ..zipbuild import ExportTooLarge, build_zip
 
 router = APIRouter()
@@ -35,12 +36,11 @@ def allowed_units(ctx: Ctx, a: Assignment) -> list[services.Unit]:
         return [u for u in units if u.submission is None or acl.can_view_submission(ctx, u.submission, a)]
     if not ctx.is_student:
         return []
+    g = acl.active_group_of(db, ctx.user.id)
     if a.submission_mode == "GROUP":
-        g = acl.active_group_of(db, ctx.user.id)
-        if g is None:
-            return []
-        return services.assignment_units(db, a, {g.id})
-    return [u for u in services.assignment_units(db, a, None) if u.student_id == ctx.user.id]
+        return services.assignment_units(db, a, {g.id}) if g else []
+    # 只算自己那一組，不必替全部學員計分
+    return [u for u in services.assignment_units(db, a, {g.id} if g else None) if u.student_id == ctx.user.id]
 
 
 def downloadable_assignments(ctx: Ctx) -> list[tuple[Assignment, Course]]:
@@ -99,6 +99,6 @@ def downloads_zip(assignment_id: int = Form(...), units: list[str] = Form([]), v
           {"units": sorted(wanted), "versions": versions, "force_naming": force_naming == "1", **stats}, ctx.ip)
     db.commit()
     course = db.get(Course, a.course_id)
-    name = f"{course.file_name}_{a.file_name}_{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
+    name = f"{course.file_name}_{a.file_name}_{datetime.now(TAIPEI).strftime('%Y%m%d-%H%M')}.zip"
     return FileResponse(path, media_type="application/zip", filename=name,
                         background=BackgroundTask(lambda: path.unlink(missing_ok=True)))

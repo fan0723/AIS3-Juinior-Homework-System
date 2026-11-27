@@ -71,7 +71,7 @@ class _BodyTooLarge(Exception):
 
 
 async def _too_large(send):
-    body = "上傳內容超過系統上限（整次提交最多 40 MB）。".encode()
+    body = "上傳內容超過系統上限。".encode()
     await send({"type": "http.response.start", "status": 413,
                 "headers": [(b"content-type", b"text/plain; charset=utf-8"), (b"content-length", str(len(body)).encode())]})
     await send({"type": "http.response.body", "body": body})
@@ -121,6 +121,9 @@ async def lifespan(app: FastAPI):
     if not settings.secret_key or len(settings.secret_key) < 32:
         raise RuntimeError("AAMS_SECRET_KEY 未設定或太短，請先執行：python manage.py init")
     init_db()
+    from .similarity import fail_interrupted_runs
+
+    fail_interrupted_runs()
     if settings.run_worker:
         from .storage import start_worker, stop_worker
 

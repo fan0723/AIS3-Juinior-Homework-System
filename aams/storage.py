@@ -185,13 +185,15 @@ def _update_revision_state(db, revision_id: int) -> None:
         rev.scan_state = "ACCEPTED"
 
 
-def purge_revision_files(db, rev: Revision) -> None:
+def purge_revision_files(db, rev: Revision) -> list[Path]:
+    """標記淘汰並回傳要刪除的檔案路徑；呼叫端在 commit 成功後才刪（交易失敗時檔案仍在）。"""
     now = utcnow()
+    paths: list[Path] = []
     for art in db.scalars(select(Artifact).where(Artifact.revision_id == rev.id, Artifact.purged_at.is_(None))):
-        for base in (QUARANTINE, ACCEPTED):
-            (base / art.private_key).unlink(missing_ok=True)
+        paths += [QUARANTINE / art.private_key, ACCEPTED / art.private_key]
         art.purged_at = now
     rev.purged_at = now
+    return paths
 
 
 def cleanup_tmp(max_age_s: int = 6 * 3600) -> None:
