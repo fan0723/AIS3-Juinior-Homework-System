@@ -19,3 +19,5 @@ aams/static/local/
 .DS_Store
 Thumbs.db
 graphify-out/
+.claude/
+.codex/
