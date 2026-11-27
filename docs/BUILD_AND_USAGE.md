@@ -248,6 +248,7 @@ ta@example.org,李助教,TA,範例大學,,G01,10101018888,
 | `manage.py totp-code EMAIL` | **僅限測試**：印出該帳號目前的 TOTP 碼（免手機） |
 | `manage.py backup` | SQLite 線上一致性備份 + 已通過檢查的附件與教材 → `data/backups/aams-時間.tar.gz` |
 | `manage.py reset-instance` | 期末重置：需**兩位不同管理員**輸入帳密 + 確認字串；不會刪除 `data/backups/` |
+| `manage.py reset-demo [--yes] [--force]` | **僅限測試**：清空資料庫與上傳檔案、保留 `.env`（SECRET 不變），重建 `seed-demo --active` 示範資料；有非示範帳號時需 `--force` |
 
 還原（SQLite）：停止服務 → 解壓備份 → 將 `aams.db` 放回 `data/aams.db`、`accepted/`、`materials/` 放回 `data/` → 啟動。請定期演練並把備份複製到另一台機器。
 

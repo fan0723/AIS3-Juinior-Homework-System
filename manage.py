@@ -9,6 +9,8 @@
     python manage.py totp-code EMAIL       （僅測試）印出該帳號目前的 TOTP 驗證碼
     python manage.py backup                備份資料庫與檔案到 data/backups/
     python manage.py reset-instance        期末重置（需兩位管理員確認）
+    python manage.py reset-demo [--yes] [--force]
+                                           測試環境完整重置：清空資料庫與上傳檔案，保留 .env，重建示範資料
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ def cmd_init(args) -> None:
     if ENV.exists() and not args.force:
         print(f".env 已存在：{ENV}（如要覆寫請加 --force；覆寫 SECRET 會使所有 Session 與 MFA 失效）")
         return
+    replaced = ENV.exists()
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     ENV.write_text(
         "\n".join([
@@ -57,6 +60,9 @@ def cmd_init(args) -> None:
         encoding="utf-8",
     )
     print(f"已建立 {ENV}（AAMS_HOST={host}）")
+    if replaced:
+        print("注意：SECRET 已更換，所有登入 Session 與已綁定的 TOTP 都已失效（無法復原）。"
+              "測試環境請接著執行：python manage.py reset-demo")
 
 
 def _db():
@@ -281,7 +287,12 @@ def cmd_totp_code(args) -> None:
         f = db.scalar(select(MfaFactor).where(MfaFactor.user_id == u.id)) if u else None
         if f is None:
             sys.exit("此帳號尚未開始設定 TOTP（請先登入並打開 /mfa/setup 頁面）")
-        print(pyotp.TOTP(decrypt_secret(f.encrypted_secret)).now())
+        secret = decrypt_secret(f.encrypted_secret)
+        if secret is None:
+            sys.exit("無法解開此帳號的 TOTP 金鑰：.env 的 AAMS_SECRET_KEY 已更換（例如執行過 init --force）。\n"
+                     "  測試環境：python manage.py reset-demo\n"
+                     "  正式環境：請另一位管理員在「管理後台 › 使用者」重設此帳號的兩步驟驗證")
+        print(pyotp.TOTP(secret).now())
 
 
 def cmd_backup(args) -> None:
@@ -332,12 +343,44 @@ def cmd_reset_instance(args) -> None:
     phrase = f"RESET {settings.event_name}"
     if input(f"請輸入「{phrase}」確認：").strip() != phrase:
         sys.exit("確認字串不符，中止。")
+    _wipe_instance()
+    print("已重置資料庫與上傳檔案。注意：data/backups/ 與外部備份不會自動刪除，請依保存政策另行銷毀。")
+
+
+def _wipe_instance() -> None:
+    """刪除所有資料表與上傳檔案（data/backups/ 與 .env 不動）。"""
+    from aams import models  # noqa: F401  確保所有資料表都已註冊
+    from aams.config import settings
+    from aams.db import Base, engine
+
     Base.metadata.drop_all(engine)
     for sub in ("quarantine", "accepted", "materials", "tmp", "spool"):
         shutil.rmtree(settings.data_dir / sub, ignore_errors=True)
         (settings.data_dir / sub).mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
-    print("已重置資料庫與上傳檔案。注意：data/backups/ 與外部備份不會自動刪除，請依保存政策另行銷毀。")
+
+
+DEMO_DOMAIN = "%@demo.ais3.local"
+
+
+def cmd_reset_demo(args) -> None:
+    from sqlalchemy import select
+
+    from aams.models import User
+
+    with _db() as db:
+        others = list(db.scalars(select(User.email).where(User.canonical_email.not_like(DEMO_DOMAIN))))
+    if others and not args.force:
+        sys.exit(f"資料庫裡有 {len(others)} 個非示範帳號（例如 {others[0]}），看起來不是測試環境，中止。\n"
+                 "  確定要全部刪除（例如紅隊內測匯入的帳號）請加 --force。")
+    print("=== 測試環境完整重置：刪除所有資料表與上傳檔案，保留 .env（SECRET 不變），再重建示範資料 ===")
+    print("請先關閉 run.py（Ctrl+C），否則檔案與資料庫可能被鎖住。")
+    if not args.yes and input("請輸入「RESET DEMO」確認：").strip() != "RESET DEMO":
+        sys.exit("確認字串不符，中止。")
+    _wipe_instance()
+    cmd_seed_demo(argparse.Namespace(active=True, renew=False))
+    print("管理員需要重新綁定 TOTP：手機上舊的「AIS3 Junior 作業繳交系統」項目請刪除後再掃新 QR，")
+    print("  或直接用：python manage.py totp-code staff1@demo.ais3.local")
 
 
 def main() -> None:
@@ -367,6 +410,10 @@ def main() -> None:
     s.set_defaults(fn=cmd_totp_code)
     sp.add_parser("backup").set_defaults(fn=cmd_backup)
     sp.add_parser("reset-instance").set_defaults(fn=cmd_reset_instance)
+    s = sp.add_parser("reset-demo", help="測試環境完整重置（保留 .env）")
+    s.add_argument("--yes", action="store_true", help="不詢問確認字串（腳本用）")
+    s.add_argument("--force", action="store_true", help="資料庫有非示範帳號時仍然重置")
+    s.set_defaults(fn=cmd_reset_demo)
     args = p.parse_args()
     if args.cmd != "init" and not ENV.exists():
         import os

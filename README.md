@@ -226,10 +226,14 @@ cd D:\AIS3J-homework-system
 
 ```powershell
 # 先關閉 run.py（Ctrl+C）
-Remove-Item -Recurse -Force .\data
-.\.venv\Scripts\python manage.py seed-demo --active
+.\.venv\Scripts\python manage.py reset-demo
 .\.venv\Scripts\python run.py
 ```
+
+`reset-demo` 會清空資料庫與上傳檔案、保留 `.env`（SECRET 不變），再重建 `seed-demo --active` 的示範資料。資料庫有非 `@demo.ais3.local` 帳號時會拒絕執行，確定要刪請加 `--force`；腳本自動化可加 `--yes` 跳過確認。
+
+> [!NOTE]
+> 不要用 `manage.py init --force` 來重置：它會更換 SECRET，已綁定的 TOTP 會永久解不開。重置後管理員要重新綁定 TOTP（刪除手機上的舊項目再掃新 QR，或用 `manage.py totp-code`）。
 
 多台電腦一起測、壓力測試與完整驗收清單請見 [docs/LAN_TESTING.md](docs/LAN_TESTING.md)。
 
