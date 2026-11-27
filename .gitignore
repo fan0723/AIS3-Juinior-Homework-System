@@ -21,3 +21,6 @@ Thumbs.db
 graphify-out/
 .claude/
 .codex/
+docker-test/backups/
+docker-test/appdata/
+docker-test/caddy-root.crt
