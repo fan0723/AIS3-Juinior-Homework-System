@@ -157,7 +157,7 @@ python3 -m venv .venv
 .\.venv\Scripts\python -m pytest -q
 ```
 
-測試使用暫存資料夾與獨立資料庫，不會動到 `data/`，也不會連到 Discord（測試中攔截）。共 45 個測試，涵蓋：個資告知同意（含所有角色）、公告權限與未讀、最終收件期限預設與拒收、遲交核准註記、成績申覆（期限、重複、助教不能處理）、批次下載（資料夾／README／強制命名／權限）、相似度比對（演算法與端到端）、Discord payload 與 Webhook 驗證、監控警示與節流、舊資料庫自動補欄位、初始密碼流程、登入防枚舉、Admin MFA、電話欄位只給 Admin、20 MB／40 MB 整次總量（12+9 MB 拒絕、18+17 MB 接受、41 MB 拒絕、偽造 Content-Length）、`.php4`／`.pdf.php`／`.PHP`／偽造 PDF／HTML 拒絕、含 JavaScript 的 PDF 被 worker 拒絕、5 版淘汰與 LATE 判定、跨組讀檔拒絕、TA 需任務才能改分（含撤銷）、同題 409、統一發布與發布後補交、CSV 公式注入、XSS、預覽 token 偽造，以及所有角色的全頁面爬測。
+測試使用暫存資料夾與獨立資料庫，不會動到 `data/`，也不會連到 Discord（測試中攔截）。共 57 個測試，涵蓋：個資告知同意（含所有角色）、公告權限與未讀、最終收件期限預設與拒收、遲交核准註記、成績申覆（期限、重複、助教不能處理）、批次下載（資料夾／README／強制命名／權限）、相似度比對（演算法與端到端）、Discord payload 與 Webhook 驗證、監控警示與節流、舊資料庫自動補欄位、初始密碼流程、登入防枚舉、Admin MFA、電話欄位只給 Admin、20 MB／40 MB 整次總量（12+9 MB 拒絕、18+17 MB 接受、41 MB 拒絕、偽造 Content-Length）、`.php4`／`.pdf.php`／`.PHP`／偽造 PDF／HTML 拒絕、含 JavaScript 的 PDF 被 worker 拒絕、5 版淘汰與 LATE 判定、跨組讀檔拒絕、TA 需任務才能改分（含撤銷）、同題 409、統一發布與發布後補交、CSV 公式注入、XSS、預覽 token 偽造、團體成績依提交當下組員發布、版本淘汰保留已評分／已發布版本、停用帳號重設密碼仍停用、`reset-demo` 完整重置，以及所有角色的全頁面爬測。
 
 ---
 

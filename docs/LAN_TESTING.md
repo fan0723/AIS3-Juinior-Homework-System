@@ -244,7 +244,7 @@ AAMS_LOGIN_IP_LIMIT=500
 .\.venv\Scripts\python -m pytest -q
 ```
 
-27 個測試應全數通過（使用暫存資料庫，不影響 `data\`）。
+57 個測試應全數通過（使用暫存資料庫，不影響 `data\`）。
 
 ---
 

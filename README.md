@@ -251,7 +251,7 @@ FastAPI ──> SQLite（測試）／PostgreSQL（正式）
 ```
 
 - Python 3.12、FastAPI、SQLAlchemy 2、Argon2id、TOTP（pyotp）、pypdf
-- 測試：安裝 `requirements-dev.txt` 後執行 `python -m pytest -q`（先使用對應平台的虛擬環境 Python，例如 Windows 的 `.\.venv\Scripts\python` 或 macOS／Linux 的 `.venv/bin/python`；49 個測試涵蓋規格 §9.3 的主要安全案例與新功能）
+- 測試：安裝 `requirements-dev.txt` 後執行 `python -m pytest -q`（先使用對應平台的虛擬環境 Python，例如 Windows 的 `.\.venv\Scripts\python` 或 macOS／Linux 的 `.venv/bin/python`；57 個測試涵蓋規格 §9.3 的主要安全案例與新功能）
 
 ## 規格對應與已知限制
 
