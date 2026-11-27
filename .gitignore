@@ -18,3 +18,4 @@ aams/static/local/
 .vscode/
 .DS_Store
 Thumbs.db
+graphify-out/
